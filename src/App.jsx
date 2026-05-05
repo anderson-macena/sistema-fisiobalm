@@ -1,3 +1,4 @@
+// BLOCO 1/3 — src/App.jsx (linhas 1–420)
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, LogOut, Plus, X, CheckCircle2, AlertCircle, Clock,
@@ -27,7 +28,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
+const storageBucketName = firebaseConfig.storageBucket?.replace('.firebasestorage.app', '.appspot.com');
+const storage = getStorage(app, `gs://${storageBucketName}`);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-studio-v1';
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
@@ -61,6 +63,7 @@ const STATUS_THEME = {
   reposicao:           { color: 'text-white',        bg: 'bg-purple-600',      border: 'border-purple-500',      label: 'Reposição',                  icon: <RotateCcw size={10}/> },
   experimental:        { color: 'text-white',        bg: 'bg-amber-500',       border: 'border-amber-400',       label: 'Experimental',               icon: <FlaskConical size={10}/> },
   bloqueado:           { color: 'text-white',        bg: 'bg-slate-700',       border: 'border-slate-600',       label: 'Bloqueado',                  icon: <Lock size={10}/> },
+  bloqueado_parcial:   { color: 'text-white',        bg: 'bg-slate-600',       border: 'border-slate-500',       label: 'Bloqueio parcial',           icon: <Lock size={10}/> },
 };
 
 // Helpers
@@ -106,6 +109,7 @@ export default function App() {
   const [alunosSubTab, setAlunosSubTab] = useState('todos'); // 'todos' | 'planoAoFim'
   const [dashSubTab, setDashSubTab] = useState('geral'); // 'geral' | 'andriele' | 'jessica'
   const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
 
   const [newStudent, setNewStudent] = useState({
     name: '', cpf: '', birthDate: '', email: '', address: '', plan: 'Mensal',
@@ -271,6 +275,27 @@ export default function App() {
     }
   };
 
+  const getPartialBlockRecord = (day, hour) => schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado_parcial');
+  const getBlockedSlots = (day, hour) => getPartialBlockRecord(day, hour)?.blockedSlots || 0;
+
+  const handleSetPartialBlock = async (hour, day, blockedSlots) => {
+    const partial = getPartialBlockRecord(day, hour);
+    if (blockedSlots <= 0) {
+      if (partial) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', partial.id));
+      await createLog(`Removeu bloqueio parcial de ${day} ${hour}`);
+      return;
+    }
+    if (partial) {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', partial.id), { blockedSlots });
+    } else {
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
+        name: 'BLOQUEIO PARCIAL', studentId: null, day, hour, status: 'bloqueado_parcial', blockedSlots,
+        createdBy: user.name, createdAt: new Date().toISOString()
+      });
+    }
+    await createLog(`Definiu bloqueio parcial (${blockedSlots} vaga${blockedSlots > 1 ? 's' : ''}) em ${day} ${hour}`);
+  };
+
   const updateScheduleStatus = async (id, status, name) => {
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', id), { status });
     await createLog(`Alterou status de ${name} para ${STATUS_THEME[status]?.label ?? status}`);
@@ -344,12 +369,16 @@ export default function App() {
   const handleAttachmentUpload = async (file) => {
     if (!showAnexosStudent || !file || !firebaseUser || attachmentUploading) return;
     setAttachmentUploading(true);
+    setAttachmentError('');
     try {
       const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, '_');
       const storagePath = `artifacts/${appId}/attachments/${showAnexosStudent.id}/${safeName}`;
       const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Tempo limite excedido no upload do anexo.')), 30000);
+      });
+      await Promise.race([uploadBytes(storageRef, file), timeoutPromise]);
+      const url = await Promise.race([getDownloadURL(storageRef), timeoutPromise]);
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'attachments'), {
         studentId: showAnexosStudent.id,
         studentName: showAnexosStudent.name,
@@ -363,6 +392,7 @@ export default function App() {
       await createLog(`Adicionou anexo para ${showAnexosStudent.name}: ${file.name}`);
     } catch (err) {
       console.error(err);
+      setAttachmentError(err?.message || 'Não foi possível enviar o anexo.');
     } finally {
       setAttachmentUploading(false);
     }
@@ -398,7 +428,7 @@ export default function App() {
             <div className="h-px w-8 bg-emerald-500/30" />
           </div>
         </div>
-                <div className="space-y-6">
+        <div className="space-y-6">
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-gray-500 group-focus-within:text-emerald-500 transition-colors">
               <ShieldCheck size={20} />
@@ -411,6 +441,7 @@ export default function App() {
             />
           </div>
           {loginError && (
+            // BLOCO 2/3 — src/App.jsx (linhas 421–840)
             <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-3">
               <AlertCircle size={16} className="text-rose-500" />
               <p className="text-rose-500 text-[10px] font-black uppercase">{loginError}</p>
@@ -499,7 +530,7 @@ export default function App() {
               ))}
             </div>
 
-            {/* Seletor de turno */}
+            {/* Seletor de turno — MELHORIA 1 */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setActiveTurno('manha')}
                 className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'manha' ? 'bg-amber-500 text-black' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
@@ -512,6 +543,7 @@ export default function App() {
               ><Calendar size={14}/> Semana</button>
             </div>
 
+            {/* ===== MELHORIA 5: VISÃO SEMANAL ===== */}
             {activeTurno === 'semana' && (
               <div className="overflow-x-auto rounded-3xl border border-white/5 bg-[#11141a]">
                 <table className="w-full min-w-[700px] text-[10px]">
@@ -524,6 +556,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Separador Manhã */}
                     <tr><td colSpan={6} className="bg-amber-500/10 py-1 px-4 text-[9px] font-black uppercase text-amber-400 tracking-widest border-y border-amber-500/20">
                       <Sun size={10} className="inline mr-1"/>Manhã — 07h às 12h
                     </td></tr>
@@ -531,12 +564,14 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-emerald-500">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
+                          const slots = schedules.filter(s => s.day === day && s.hour === hour && !['bloqueado', 'bloqueado_parcial'].includes(s.status));
                           const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
+                          const blockedSlots = getBlockedSlots(day, hour);
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
                                 {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
+                                {!blocked && blockedSlots > 0 && <div className="bg-slate-600 rounded-lg px-2 py-1 text-[9px] font-black text-slate-200 flex items-center gap-1"><Lock size={8}/>{blockedSlots} vaga(s) bloqueada(s)</div>}
                                 {slots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
@@ -545,7 +580,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < 3 && user.role === 'admin' && (
+                                {!blocked && slots.length < (3 - blockedSlots) && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -557,6 +592,7 @@ export default function App() {
                         })}
                       </tr>
                     ))}
+                    {/* Separador Tarde */}
                     <tr><td colSpan={6} className="bg-blue-500/10 py-1 px-4 text-[9px] font-black uppercase text-blue-400 tracking-widest border-y border-blue-500/20">
                       <Moon size={10} className="inline mr-1"/>Tarde — 15h às 20h
                     </td></tr>
@@ -564,12 +600,14 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-blue-400">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
+                          const slots = schedules.filter(s => s.day === day && s.hour === hour && !['bloqueado', 'bloqueado_parcial'].includes(s.status));
                           const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
+                          const blockedSlots = getBlockedSlots(day, hour);
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
                                 {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
+                                {!blocked && blockedSlots > 0 && <div className="bg-slate-600 rounded-lg px-2 py-1 text-[9px] font-black text-slate-200 flex items-center gap-1"><Lock size={8}/>{blockedSlots} vaga(s) bloqueada(s)</div>}
                                 {slots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
@@ -578,7 +616,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < 3 && user.role === 'admin' && (
+                                {!blocked && slots.length < (3 - blockedSlots) && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-blue-500 hover:border-blue-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -594,8 +632,11 @@ export default function App() {
                 </table>
               </div>
             )}
-                        {activeTurno !== 'semana' && (
+
+            {/* VISÃO POR TURNO (manhã ou tarde) */}
+            {activeTurno !== 'semana' && (
               <div className="space-y-3">
+                {/* Badge do turno */}
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
                   {activeTurno === 'manha' ? <Sun size={12}/> : <Moon size={12}/>}
                   {activeTurno === 'manha' ? `Manhã — Fisioterapeuta: ${TURNO_MANHA_PROF}` : `Tarde — Fisioterapeuta: ${TURNO_TARDE_PROF}`}
@@ -604,17 +645,21 @@ export default function App() {
                 {activeHours.map(hour => {
                   const daySchedules = schedules.filter(s => s.day === selectedDay && s.hour === hour);
                   const blocked = daySchedules.find(s => s.status === 'bloqueado');
-                  const realSlots = daySchedules.filter(s => s.status !== 'bloqueado');
+                  const partialBlock = daySchedules.find(s => s.status === 'bloqueado_parcial');
+                  const blockedSlots = partialBlock?.blockedSlots || 0;
+                  const capacity = Math.max(0, 3 - blockedSlots);
+                  const realSlots = daySchedules.filter(s => !['bloqueado', 'bloqueado_parcial'].includes(s.status));
                   const userScheduled = user.role !== 'admin' && realSlots.find(s => s.studentId === user.id);
 
                   return (
                     <div key={hour} className="flex gap-3 items-start">
                       <div className={`w-16 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 ${activeTurno === 'manha' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
                         <span className={`font-black text-sm ${activeTurno === 'manha' ? 'text-amber-400' : 'text-blue-400'}`}>{hour}</span>
-                        <span className="text-[8px] font-bold text-gray-600">{realSlots.length}/3</span>
+                        <span className="text-[8px] font-bold text-gray-600">{realSlots.length}/{capacity}</span>
                       </div>
 
                       <div className="flex-1 flex flex-wrap gap-2 items-start">
+                        {/* Slot bloqueado */}
                         {blocked && (
                           <div className="flex items-center gap-2 bg-slate-700/60 border border-slate-600 px-4 py-3 rounded-2xl">
                             <Lock size={14} className="text-slate-400"/>
@@ -624,7 +669,14 @@ export default function App() {
                             )}
                           </div>
                         )}
+                        {!blocked && blockedSlots > 0 && (
+                          <div className="flex items-center gap-2 bg-slate-600/60 border border-slate-500 px-4 py-3 rounded-2xl">
+                            <Lock size={14} className="text-slate-300"/>
+                            <span className="text-[10px] font-black text-slate-200 uppercase">{blockedSlots} vaga(s) bloqueada(s)</span>
+                          </div>
+                        )}
 
+                        {/* Slots reais */}
                         {!blocked && realSlots.map(s => {
                           const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                           const isMine = s.studentId === user.id;
@@ -650,14 +702,18 @@ export default function App() {
                           );
                         })}
 
-                        {!blocked && user.role === 'admin' && realSlots.length < 3 && (
+                        {/* Controles admin */}
+                        {!blocked && user.role === 'admin' && (
                           <div className="flex gap-2">
-                            <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>
+                            {realSlots.length < capacity && <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>}
                             <button onClick={() => handleToggleBlock(hour, selectedDay)} title="Bloquear horário" className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex items-center justify-center text-slate-700 hover:text-slate-400 hover:border-slate-500 transition-all"><Lock size={16}/></button>
+                            <button onClick={() => handleSetPartialBlock(hour, selectedDay, blockedSlots === 1 ? 0 : 1)} title="Bloquear 1 vaga" className="px-3 h-14 rounded-2xl border border-dashed border-slate-700 text-[10px] font-black text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-all">B1</button>
+                            <button onClick={() => handleSetPartialBlock(hour, selectedDay, blockedSlots === 2 ? 0 : 2)} title="Bloquear 2 vagas" className="px-3 h-14 rounded-2xl border border-dashed border-slate-700 text-[10px] font-black text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-all">B2</button>
                           </div>
                         )}
 
-                        {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < 3 && (user.credits || 0) > 0 && (
+                        {/* Reposição (aluno) */}
+                        {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < capacity && (user.credits || 0) > 0 && (
                           <button onClick={() => handleReposicao(hour)} className="w-14 h-14 rounded-2xl border border-dashed border-purple-500/20 flex flex-col items-center justify-center text-purple-500/40 hover:text-purple-400 hover:border-purple-500/40 transition-all">
                             <RotateCcw size={16} className="mb-1"/><span className="text-[7px] font-black uppercase">Crédito</span>
                           </button>
@@ -671,6 +727,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ===== ABA ALUNOS ===== */}
         {activeTab === 'alunos' && user.role === 'admin' && (
           <div>
             <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
@@ -681,6 +738,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Sub-abas */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setAlunosSubTab('todos')}
                 className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-white text-black' : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
@@ -691,121 +749,7 @@ export default function App() {
                 <AlertTriangle size={12}/> Plano ao Fim ({alunosPlanoAoFim.length})
               </button>
             </div>
-
-            {(() => {
-              const lista = (alunosSubTab === 'planoAoFim' ? alunosPlanoAoFim : students)
-                .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {lista.map(s => {
-                    const daysLeft = getDaysUntilEnd(s.endDate);
-                    const isExpiring = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
-                    const fixedScheds = (s.fixedSchedules || []).map(fs => `${fs.day.substring(0,3)} ${fs.hour}`).join(' • ');
-
-                    return (
-                      <div key={s.id} className={`bg-[#11141a] p-5 rounded-[2rem] border transition-all group relative ${isExpiring ? 'border-rose-500/40 shadow-lg shadow-rose-500/10' : 'border-white/5 hover:border-emerald-500/30'}`}>
-                        {isExpiring && (
-                          <div className="absolute top-0 left-0 right-0 bg-rose-500/20 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
-                            <AlertTriangle size={10} className="text-rose-400"/>
-                            <span className="text-[9px] font-black text-rose-400 uppercase">Plano acaba em {daysLeft === 0 ? 'hoje' : `${daysLeft}d`}</span>
-                          </div>
-                        )}
-                        <div className={`${isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
-                          <div className="flex items-start gap-3 mb-3 cursor-pointer">
-                            <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 font-black text-lg shrink-0">{s.name.charAt(0)}</div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-black uppercase text-base text-white leading-tight break-words">{s.name}</h3>
-                              <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{s.plan} • {s.frequencyLabel}</p>
-                            </div>
-                          </div>
-
-                          {fixedScheds && (
-                            <div className="bg-white/5 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
-                              <Clock size={10} className="text-emerald-500 shrink-0"/>
-                              <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider truncate">{fixedScheds}</span>
-                            </div>
-                          )}
-
-                          <div className="space-y-1 pt-2 border-t border-white/5">
-                            <div className="flex justify-between text-[8px] font-black uppercase">
-                              <span className="text-gray-600">Início</span>
-                              <span className="text-white">{s.startDate ? new Date(s.startDate).toLocaleDateString() : '---'}</span>
-                            </div>
-                            <div className="flex justify-between text-[8px] font-black uppercase">
-                              <span className="text-gray-600">Fim</span>
-                              <span className={isExpiring ? 'text-rose-400' : 'text-emerald-500'}>{s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                          <button onClick={() => setShowProntuarioId(s.id)} title="Prontuário"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-purple-500/20 hover:text-purple-400 transition-all text-[9px] font-black uppercase">
-                            <BookOpen size={12}/> Prontuário
-                          </button>
-                          <button onClick={e => { e.stopPropagation(); setShowAnexosId(s.id); }} title="Anexos"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all text-[9px] font-black uppercase">
-                            <Paperclip size={12}/> Anexos
-                          </button>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <button onClick={e => { e.stopPropagation(); setEditStudentData(JSON.parse(JSON.stringify(s))); }} title="Editar"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all text-[9px] font-black uppercase">
-                            <Edit3 size={12}/> Editar
-                          </button>
-                          <button onClick={e => handleDeleteStudent(e, s.id, s.name)} title="Excluir"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all text-[9px] font-black uppercase">
-                            <Trash2 size={12}/> Excluir
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {lista.length === 0 && (
-                    <div className="col-span-full text-center py-16 text-gray-600">
-                      <Users size={32} className="mx-auto mb-3 opacity-30"/>
-                      <p className="text-[10px] font-black uppercase">Nenhum aluno encontrado</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {activeTab === 'dashboard' && user.role === 'admin' && (
-          <div>
-            <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6">Dashboard</h1>
-
-            <div className="flex gap-2 mb-8 overflow-x-auto pb-1 no-scrollbar">
-              {[
-                { key: 'geral',    label: 'Geral',    color: 'bg-white text-black' },
-                { key: 'andriele', label: 'Andriele · Manhã', color: 'bg-amber-500 text-black' },
-                { key: 'jessica',  label: 'Jessica · Tarde',  color: 'bg-blue-500 text-black' },
-              ].map(t => (
-                <button key={t.key} onClick={() => setDashSubTab(t.key)}
-                  className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase whitespace-nowrap transition-all ${dashSubTab === t.key ? t.color : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {dashSubTab === 'geral' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Agendados"    value={metrics.pendentes}  color="text-gray-400"   icon={<Clock size={22}/>} />
-                  <StatCard label="Presenças"    value={metrics.concluidas} color="text-emerald-500" icon={<CheckCircle2 size={22}/>} />
-                  <StatCard label="Faltas"       value={metrics.faltas}     color="text-rose-500"   icon={<AlertCircle size={22}/>} />
-                  <StatCard label="Desmarcações" value={metrics.desmarcados}color="text-orange-500" icon={<CalendarX size={22}/>} />
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <StatCard label="Reposições"   value={metrics.reposicao}    color="text-purple-400" icon={<RotateCcw size={22}/>} />
-                  <StatCard label="Experimentais"value={metrics.experimental} color="text-amber-400"  icon={<FlaskConical size={22}/>} />
-                  <StatCard label="Total Alunos" value={metrics.alunos}       color="text-blue-500"   icon={<Users size={22}/>} />
-                </div>
-              </div>
-            )}
-
+            // BLOCO 3/3 — src/App.jsx (linhas 841–1235)
             {dashSubTab === 'andriele' && (
               <ProfDashboard
                 name={TURNO_MANHA_PROF}
@@ -815,6 +759,7 @@ export default function App() {
               />
             )}
 
+            {/* Dashboard Jessica — MELHORIA 4 */}
             {dashSubTab === 'jessica' && (
               <ProfDashboard
                 name={TURNO_TARDE_PROF}
@@ -826,6 +771,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ===== ABA HISTÓRICO — MELHORIA 7 ===== */}
         {activeTab === 'historico' && user.role === 'admin' && (
           <div className="max-w-4xl mx-auto space-y-2">
             <h1 className="text-2xl font-black uppercase italic mb-6">Logs do Sistema</h1>
@@ -848,6 +794,7 @@ export default function App() {
         )}
       </main>
 
+      {/* ===== MODAL DE MATRÍCULA ===== */}
       {showAddStudent && (
         <Modal title="Nova Matrícula" onClose={() => setShowAddStudent(false)}>
           <form onSubmit={handleAddStudent} className="space-y-6">
@@ -899,6 +846,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ===== MODAL DE EDIÇÃO ===== */}
       {editStudentData && (
         <Modal title="Editar Aluno" onClose={() => setEditStudentData(null)}>
           <form onSubmit={handleEditStudent} className="space-y-6">
@@ -934,6 +882,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ===== MODAL AGENDAMENTO (ADMIN) ===== */}
       {showScheduleModal && user.role === 'admin' && (
         <Modal title={`Agendar Sessão — ${selectedDay} ${showScheduleModal.hour}`} onClose={() => { setShowScheduleModal(null); setScheduleForm({ studentId: '', manualName: '', status: 'pendente' }); }} size="sm">
           <form onSubmit={async (e) => {
@@ -972,6 +921,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ===== MODAL DETALHES DO ALUNO ===== */}
       {showStudentDetails && user.role === 'admin' && (
         <Modal title={showStudentDetails.name} onClose={() => setShowStudentDetailsId(null)} size="md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1004,6 +954,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ===== MODAL PRONTUÁRIO ===== */}
       {showProntuarioStudent && user.role === 'admin' && (
         <Modal title={`Prontuário — ${showProntuarioStudent.name}`} onClose={() => setShowProntuarioId(null)} size="lg">
           <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6">
@@ -1046,6 +997,7 @@ export default function App() {
         </Modal>
       )}
 
+      {/* ===== MODAL ANEXOS ===== */}
       {showAnexosStudent && user.role === 'admin' && (
         <Modal title={`Anexos — ${showAnexosStudent.name}`} onClose={() => setShowAnexosId(null)} size="lg">
           <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6 border border-white/5">
@@ -1064,6 +1016,9 @@ export default function App() {
                 }}
               />
             </label>
+            {attachmentError && (
+              <p className="mt-3 text-[9px] font-black uppercase text-rose-400">{attachmentError}</p>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -1094,6 +1049,8 @@ export default function App() {
     </div>
   );
 }
+
+// ===== COMPONENTES AUXILIARES =====
 
 function Modal({ title, children, onClose, size = 'md' }) {
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
