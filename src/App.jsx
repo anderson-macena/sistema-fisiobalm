@@ -47,15 +47,13 @@ import {
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 
 // Verificação de segurança para ambiente local (VS Code / Localhost)
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: "AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM",
-      authDomain: "fisiobalm-26532.firebaseapp.com",
-      projectId: "fisiobalm-26532",
-      storageBucket: "fisiobalm-26532.firebasestorage.app",
-      messagingSenderId: "498080566980",
-      appId: "1:498080566980:web:07c3ca7fe7869b4aab8391"
+const firebaseConfig = {
+  apiKey: "AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM",
+  authDomain: "fisiobalm-26532.firebaseapp.com",
+  projectId: "fisiobalm-26532",
+  storageBucket: "fisiobalm-26532.firebasestorage.app",
+  messagingSenderId: "498080566980",
+  appId: "1:498080566980:web:07c3ca7fe7869b4aab8391"
     };
 
 const app = initializeApp(firebaseConfig);
