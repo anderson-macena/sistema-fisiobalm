@@ -498,13 +498,19 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-emerald-500">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
-                          const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
+                          const allSlots = schedules.filter(s => s.day === day && s.hour === hour);
+                          const blockedSlots = allSlots.filter(s => s.status === 'bloqueado');
+                          const realSlots = allSlots.filter(s => s.status !== 'bloqueado');
+                          const totalOcupado = realSlots.length + blockedSlots.length;
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
-                                {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
-                                {slots.map(s => {
+                                {blockedSlots.map(bs => (
+                                  <div key={bs.id} className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1">
+                                    <Lock size={8}/>Bloqueada
+                                  </div>
+                                ))}
+                                {realSlots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
                                     <div key={s.id} className={`${theme.bg} rounded-lg px-2 py-1 text-[9px] font-black text-white truncate max-w-[90px]`} title={s.name}>
@@ -512,7 +518,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < 3 && user.role === 'admin' && (
+                                {totalOcupado < 3 && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -532,13 +538,19 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-blue-400">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
-                          const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
+                          const allSlots = schedules.filter(s => s.day === day && s.hour === hour);
+                          const blockedSlots = allSlots.filter(s => s.status === 'bloqueado');
+                          const realSlots = allSlots.filter(s => s.status !== 'bloqueado');
+                          const totalOcupado = realSlots.length + blockedSlots.length;
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
-                                {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
-                                {slots.map(s => {
+                                {blockedSlots.map(bs => (
+                                  <div key={bs.id} className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1">
+                                    <Lock size={8}/>Bloqueada
+                                  </div>
+                                ))}
+                                {realSlots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
                                     <div key={s.id} className={`${theme.bg} rounded-lg px-2 py-1 text-[9px] font-black text-white truncate max-w-[90px]`} title={s.name}>
@@ -546,7 +558,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < 3 && user.role === 'admin' && (
+                                {totalOcupado < 3 && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-blue-500 hover:border-blue-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -574,40 +586,32 @@ export default function App() {
 
                 {activeHours.map(hour => {
                   const daySchedules = schedules.filter(s => s.day === selectedDay && s.hour === hour);
-                  const blocked = daySchedules.find(s => s.status === 'bloqueado');
+                  // Separa vagas bloqueadas individualmente dos slots reais
+                  const blockedSlots = daySchedules.filter(s => s.status === 'bloqueado');
                   const realSlots = daySchedules.filter(s => s.status !== 'bloqueado');
+                  // Total ocupado = reais + bloqueados (cada um conta como 1 vaga)
+                  const totalOcupado = realSlots.length + blockedSlots.length;
+                  const vagasLivres = 3 - totalOcupado;
                   const userScheduled = user.role !== 'admin' && realSlots.find(s => s.studentId === user.id);
 
                   return (
                     <div key={hour} className="flex gap-3 items-start">
                       <div className={`w-16 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 ${activeTurno === 'manha' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
                         <span className={`font-black text-sm ${activeTurno === 'manha' ? 'text-amber-400' : 'text-blue-400'}`}>{hour}</span>
-                        <span className="text-[8px] font-bold text-gray-600">{realSlots.length}/3</span>
+                        <span className="text-[8px] font-bold text-gray-600">{totalOcupado}/3</span>
                       </div>
 
                       <div className="flex-1 flex flex-wrap gap-2 items-start">
-                        {/* Slot bloqueado */}
-                        {blocked && (
-                          <div className="flex items-center gap-2 bg-slate-700/60 border border-slate-600 px-4 py-3 rounded-2xl">
-                            <Lock size={14} className="text-slate-400"/>
-                            <span className="text-[10px] font-black text-slate-300 uppercase">Horário Bloqueado</span>
-                            {user.role === 'admin' && (
-                              <button onClick={() => handleToggleBlock(hour, selectedDay)} className="ml-2 text-slate-500 hover:text-emerald-400 transition-all"><Unlock size={12}/></button>
-                            )}
-                          </div>
-                        )}
 
-                        {/* Slots reais — MELHORIA 2: nomes sempre visíveis, fundo colorido */}
-                        {!blocked && realSlots.map(s => {
+                        {/* Slots reais — nome sempre visível com contraste */}
+                        {realSlots.map(s => {
                           const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                           const isMine = s.studentId === user.id;
                           if (user.role !== 'admin' && !isMine) return null;
                           return (
                             <div key={s.id} className={`relative group ${theme.bg} border ${theme.border} px-4 py-3 rounded-2xl min-w-[120px]`}>
-                              {/* MELHORIA 2: nome sempre visível com contraste */}
                               <span className="block text-[11px] font-black text-white uppercase truncate max-w-[130px]">{s.name}</span>
-                              <span className={`text-[8px] font-black uppercase text-white/70`}>{theme.label}</span>
-
+                              <span className="text-[8px] font-black uppercase text-white/70">{theme.label}</span>
                               {user.role === 'admin' && (
                                 <div className="mt-2">
                                   <select value={s.status} onChange={e => updateScheduleStatus(s.id, e.target.value, s.name)}
@@ -624,40 +628,75 @@ export default function App() {
                           );
                         })}
 
-                        {/* Botão adicionar + bloquear vaga individual (admin) */}
-                        {!blocked && user.role === 'admin' && realSlots.length < 3 && (
+                        {/* Vagas bloqueadas individualmente — cada uma é um card independente */}
+                        {blockedSlots.map(bs => (
+                          <div key={bs.id} className="bg-slate-700/50 border border-slate-600 px-4 py-3 rounded-2xl min-w-[110px] flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <Lock size={12} className="text-slate-400 shrink-0"/>
+                              <span className="text-[10px] font-black text-slate-300 uppercase">Vaga bloqueada</span>
+                            </div>
+                            {user.role === 'admin' && (
+                              <button
+                                onClick={async () => {
+                                  await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', bs.id));
+                                  await createLog(`Desbloqueou 1 vaga em ${selectedDay} ${hour}`);
+                                }}
+                                className="flex items-center gap-1 mt-1 text-slate-500 hover:text-emerald-400 transition-all text-[8px] font-black uppercase"
+                              >
+                                <Unlock size={10}/> Desbloquear
+                              </button>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Botões de ação admin — só aparecem se ainda há vagas livres */}
+                        {user.role === 'admin' && vagasLivres > 0 && (
                           <div className="flex gap-2 flex-wrap">
+                            {/* Agendar */}
                             <button onClick={() => setShowScheduleModal({ hour })}
                               className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all gap-0.5">
                               <Plus size={16}/>
                               <span className="text-[7px] font-black uppercase">Agendar</span>
                             </button>
-                            {/* Bloquear 1 vaga — cria slot "bloqueado" para uma vaga específica */}
+                            {/* Bloquear 1 vaga — só ocupa 1 das vagas restantes */}
                             <button
                               onClick={async () => {
                                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
                                   name: 'VAGA BLOQUEADA', studentId: null, day: selectedDay, hour,
-                                  status: 'bloqueado', createdBy: user.name, createdAt: new Date().toISOString()
+                                  status: 'bloqueado', isSlotBlock: true,
+                                  createdBy: user.name, createdAt: new Date().toISOString()
                                 });
-                                await createLog(`Bloqueou 1 vaga em ${selectedDay} ${hour}`);
+                                await createLog(`Bloqueou 1 vaga em ${selectedDay} ${hour} (${blockedSlots.length + 1}ª bloqueada)`);
                               }}
-                              title="Bloquear 1 vaga"
-                              className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-700 hover:text-slate-300 hover:border-slate-500 hover:bg-slate-700/20 transition-all gap-0.5">
-                              <Lock size={14}/>
-                              <span className="text-[7px] font-black uppercase">Vaga</span>
+                              title={`Bloquear 1 vaga (${vagasLivres} livre${vagasLivres > 1 ? 's' : ''})`}
+                              className="w-14 h-14 rounded-2xl border border-dashed border-slate-600 flex flex-col items-center justify-center text-slate-600 hover:text-slate-300 hover:border-slate-400 hover:bg-slate-700/20 transition-all gap-0.5">
+                              <Lock size={13}/>
+                              <span className="text-[7px] font-black uppercase">+1 vaga</span>
                             </button>
-                            {/* Bloquear horário inteiro */}
-                            <button onClick={() => handleToggleBlock(hour, selectedDay)}
-                              title="Bloquear horário inteiro"
-                              className="w-14 h-14 rounded-2xl border border-dashed border-rose-900 flex flex-col items-center justify-center text-rose-900 hover:text-rose-400 hover:border-rose-600 hover:bg-rose-900/10 transition-all gap-0.5">
-                              <Lock size={14}/>
-                              <span className="text-[7px] font-black uppercase">Tudo</span>
-                            </button>
+                            {/* Bloquear TUDO que resta — ocupa todas as vagas livres de uma vez */}
+                            {vagasLivres > 1 && (
+                              <button
+                                onClick={async () => {
+                                  for (let i = 0; i < vagasLivres; i++) {
+                                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
+                                      name: 'VAGA BLOQUEADA', studentId: null, day: selectedDay, hour,
+                                      status: 'bloqueado', isSlotBlock: true,
+                                      createdBy: user.name, createdAt: new Date().toISOString()
+                                    });
+                                  }
+                                  await createLog(`Bloqueou todas as ${vagasLivres} vagas restantes em ${selectedDay} ${hour}`);
+                                }}
+                                title={`Bloquear as ${vagasLivres} vagas restantes`}
+                                className="w-14 h-14 rounded-2xl border border-dashed border-rose-800 flex flex-col items-center justify-center text-rose-800 hover:text-rose-400 hover:border-rose-600 hover:bg-rose-900/10 transition-all gap-0.5">
+                                <Lock size={13}/>
+                                <span className="text-[7px] font-black uppercase">Tudo</span>
+                              </button>
+                            )}
                           </div>
                         )}
 
                         {/* Reposição (aluno) */}
-                        {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < 3 && (user.credits || 0) > 0 && (
+                        {user.role !== 'admin' && !userScheduled && vagasLivres > 0 && (user.credits || 0) > 0 && (
                           <button onClick={() => handleReposicao(hour)} className="w-14 h-14 rounded-2xl border border-dashed border-purple-500/20 flex flex-col items-center justify-center text-purple-500/40 hover:text-purple-400 hover:border-purple-500/40 transition-all">
                             <RotateCcw size={16} className="mb-1"/><span className="text-[7px] font-black uppercase">Crédito</span>
                           </button>
