@@ -13,7 +13,6 @@ import {
   deleteDoc, updateDoc, increment
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM",
@@ -27,8 +26,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storageBucketName = firebaseConfig.storageBucket?.replace('.firebasestorage.app', '.appspot.com');
-const storage = getStorage(app, `gs://${storageBucketName}`);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-studio-v1';
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
@@ -62,7 +59,6 @@ const STATUS_THEME = {
   reposicao:           { color: 'text-white',        bg: 'bg-purple-600',      border: 'border-purple-500',      label: 'Reposição',                  icon: <RotateCcw size={10}/> },
   experimental:        { color: 'text-white',        bg: 'bg-amber-500',       border: 'border-amber-400',       label: 'Experimental',               icon: <FlaskConical size={10}/> },
   bloqueado:           { color: 'text-white',        bg: 'bg-slate-700',       border: 'border-slate-600',       label: 'Bloqueado',                  icon: <Lock size={10}/> },
-  bloqueado_parcial:   { color: 'text-white',        bg: 'bg-slate-600',       border: 'border-slate-500',       label: 'Bloqueio parcial',           icon: <Lock size={10}/> },
 };
 
 // Helpers
@@ -86,7 +82,6 @@ export default function App() {
   const [students, setStudents] = useState([]);
   const [logs, setLogs] = useState([]);
   const [evolutions, setEvolutions] = useState([]);
-  const [attachments, setAttachments] = useState([]);
   const [loginCpf, setLoginCpf] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -107,8 +102,6 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [alunosSubTab, setAlunosSubTab] = useState('todos'); // 'todos' | 'planoAoFim'
   const [dashSubTab, setDashSubTab] = useState('geral'); // 'geral' | 'andriele' | 'jessica'
-  const [attachmentUploading, setAttachmentUploading] = useState(false);
-  const [attachmentError, setAttachmentError] = useState('');
 
   const [newStudent, setNewStudent] = useState({
     name: '', cpf: '', birthDate: '', email: '', address: '', plan: 'Mensal',
@@ -135,7 +128,7 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseUser) return;
-    const refs = ['schedules', 'students', 'logs', 'evolutions', 'attachments'].map(c =>
+    const refs = ['schedules', 'students', 'logs', 'evolutions'].map(c =>
       collection(db, 'artifacts', appId, 'public', 'data', c)
     );
     const unsubSchedules = onSnapshot(refs[0], snap => setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
@@ -151,8 +144,7 @@ export default function App() {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 80));
     }, err => console.error(err));
     const unsubEvols = onSnapshot(refs[3], snap => setEvolutions(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
-    const unsubAttachments = onSnapshot(refs[4], snap => setAttachments(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
-    return () => { unsubSchedules(); unsubStudents(); unsubLogs(); unsubEvols(); unsubAttachments(); };
+    return () => { unsubSchedules(); unsubStudents(); unsubLogs(); unsubEvols(); };
   }, [firebaseUser, user?.id]);
 
   // Notificação de plano próximo ao fim — gera log automático
@@ -274,27 +266,6 @@ export default function App() {
     }
   };
 
-  const getPartialBlockRecord = (day, hour) => schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado_parcial');
-  const getBlockedSlots = (day, hour) => getPartialBlockRecord(day, hour)?.blockedSlots || 0;
-
-  const handleSetPartialBlock = async (hour, day, blockedSlots) => {
-    const partial = getPartialBlockRecord(day, hour);
-    if (blockedSlots <= 0) {
-      if (partial) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', partial.id));
-      await createLog(`Removeu bloqueio parcial de ${day} ${hour}`);
-      return;
-    }
-    if (partial) {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', partial.id), { blockedSlots });
-    } else {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
-        name: 'BLOQUEIO PARCIAL', studentId: null, day, hour, status: 'bloqueado_parcial', blockedSlots,
-        createdBy: user.name, createdAt: new Date().toISOString()
-      });
-    }
-    await createLog(`Definiu bloqueio parcial (${blockedSlots} vaga${blockedSlots > 1 ? 's' : ''}) em ${day} ${hour}`);
-  };
-
   const updateScheduleStatus = async (id, status, name) => {
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', id), { status });
     await createLog(`Alterou status de ${name} para ${STATUS_THEME[status]?.label ?? status}`);
@@ -334,9 +305,7 @@ export default function App() {
       const monthly = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(mesAtual) && s.status === 'concluida').length;
       const totalConcluidas = profSchedules.filter(s => s.status === 'concluida').length;
       const totalFaltas = profSchedules.filter(s => s.status === 'falta').length;
-      const totalReposicao = profSchedules.filter(s => s.status === 'reposicao').length;
-      const totalExperimental = profSchedules.filter(s => s.status === 'experimental').length;
-      return { daily, monthly, totalConcluidas, totalFaltas, totalReposicao, totalExperimental, total: profSchedules.length };
+      return { daily, monthly, totalConcluidas, totalFaltas, total: profSchedules.length };
     };
     return {
       andriele: calcProf(TURNO_MANHA_PROF),
@@ -360,42 +329,6 @@ export default function App() {
   const showStudentDetails = useMemo(() => students.find(s => s.id === showStudentDetailsId), [students, showStudentDetailsId]);
   const showProntuarioStudent = useMemo(() => students.find(s => s.id === showProntuarioId), [students, showProntuarioId]);
   const showAnexosStudent = useMemo(() => students.find(s => s.id === showAnexosId), [students, showAnexosId]);
-  const showAnexosStudentFiles = useMemo(
-    () => attachments.filter(a => a.studentId === showAnexosId).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
-    [attachments, showAnexosId]
-  );
-
-  const handleAttachmentUpload = async (file) => {
-    if (!showAnexosStudent || !file || !firebaseUser || attachmentUploading) return;
-    setAttachmentUploading(true);
-    setAttachmentError('');
-    try {
-      const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, '_');
-      const storagePath = `artifacts/${appId}/attachments/${showAnexosStudent.id}/${safeName}`;
-      const storageRef = ref(storage, storagePath);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Tempo limite excedido no upload do anexo.')), 30000);
-      });
-      await Promise.race([uploadBytes(storageRef, file), timeoutPromise]);
-      const url = await Promise.race([getDownloadURL(storageRef), timeoutPromise]);
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'attachments'), {
-        studentId: showAnexosStudent.id,
-        studentName: showAnexosStudent.name,
-        fileName: file.name,
-        fileType: file.type || 'desconhecido',
-        fileSize: file.size || 0,
-        url,
-        createdBy: user?.name || 'Sistema',
-        timestamp: new Date().toISOString()
-      });
-      await createLog(`Adicionou anexo para ${showAnexosStudent.name}: ${file.name}`);
-    } catch (err) {
-      console.error(err);
-      setAttachmentError(err?.message || 'Não foi possível enviar o anexo.');
-    } finally {
-      setAttachmentUploading(false);
-    }
-  };
 
   // Alunos com plano próximo ao fim (≤3 dias)
   const alunosPlanoAoFim = useMemo(() => students.filter(s => {
@@ -562,14 +495,12 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-emerald-500">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && !['bloqueado', 'bloqueado_parcial'].includes(s.status));
+                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
                           const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
-                          const blockedSlots = getBlockedSlots(day, hour);
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
                                 {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
-                                {!blocked && blockedSlots > 0 && <div className="bg-slate-600 rounded-lg px-2 py-1 text-[9px] font-black text-slate-200 flex items-center gap-1"><Lock size={8}/>{blockedSlots} vaga(s) bloqueada(s)</div>}
                                 {slots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
@@ -578,7 +509,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < (3 - blockedSlots) && user.role === 'admin' && (
+                                {!blocked && slots.length < 3 && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -598,14 +529,12 @@ export default function App() {
                       <tr key={hour} className="border-b border-white/5 hover:bg-white/[0.02]">
                         <td className="p-2 text-center font-black text-blue-400">{hour}</td>
                         {DAYS.map(day => {
-                          const slots = schedules.filter(s => s.day === day && s.hour === hour && !['bloqueado', 'bloqueado_parcial'].includes(s.status));
+                          const slots = schedules.filter(s => s.day === day && s.hour === hour && s.status !== 'bloqueado');
                           const blocked = schedules.find(s => s.day === day && s.hour === hour && s.status === 'bloqueado');
-                          const blockedSlots = getBlockedSlots(day, hour);
                           return (
                             <td key={day} className="p-1 align-top">
                               <div className="space-y-1">
                                 {blocked && <div className="bg-slate-700 rounded-lg px-2 py-1 text-[9px] font-black text-slate-300 flex items-center gap-1"><Lock size={8}/>Bloqueado</div>}
-                                {!blocked && blockedSlots > 0 && <div className="bg-slate-600 rounded-lg px-2 py-1 text-[9px] font-black text-slate-200 flex items-center gap-1"><Lock size={8}/>{blockedSlots} vaga(s) bloqueada(s)</div>}
                                 {slots.map(s => {
                                   const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                                   return (
@@ -614,7 +543,7 @@ export default function App() {
                                     </div>
                                   );
                                 })}
-                                {!blocked && slots.length < (3 - blockedSlots) && user.role === 'admin' && (
+                                {!blocked && slots.length < 3 && user.role === 'admin' && (
                                   <button onClick={() => { setSelectedDay(day); setShowScheduleModal({ hour }); }}
                                     className="w-full h-5 rounded-lg border border-dashed border-white/10 text-gray-700 hover:text-blue-500 hover:border-blue-500/30 flex items-center justify-center transition-all">
                                     <Plus size={10}/>
@@ -637,23 +566,20 @@ export default function App() {
                 {/* Badge do turno */}
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
                   {activeTurno === 'manha' ? <Sun size={12}/> : <Moon size={12}/>}
-                  {activeTurno === 'manha' ? `Manhã — Fisioterapeuta: ${TURNO_MANHA_PROF}` : `Tarde — Fisioterapeuta: ${TURNO_TARDE_PROF}`}
+                  {activeTurno === 'manha' ? `Manhã — Profissional: ${TURNO_MANHA_PROF}` : `Tarde — Profissional: ${TURNO_TARDE_PROF}`}
                 </div>
 
                 {activeHours.map(hour => {
                   const daySchedules = schedules.filter(s => s.day === selectedDay && s.hour === hour);
                   const blocked = daySchedules.find(s => s.status === 'bloqueado');
-                  const partialBlock = daySchedules.find(s => s.status === 'bloqueado_parcial');
-                  const blockedSlots = partialBlock?.blockedSlots || 0;
-                  const capacity = Math.max(0, 3 - blockedSlots);
-                  const realSlots = daySchedules.filter(s => !['bloqueado', 'bloqueado_parcial'].includes(s.status));
+                  const realSlots = daySchedules.filter(s => s.status !== 'bloqueado');
                   const userScheduled = user.role !== 'admin' && realSlots.find(s => s.studentId === user.id);
 
                   return (
                     <div key={hour} className="flex gap-3 items-start">
                       <div className={`w-16 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 ${activeTurno === 'manha' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
                         <span className={`font-black text-sm ${activeTurno === 'manha' ? 'text-amber-400' : 'text-blue-400'}`}>{hour}</span>
-                        <span className="text-[8px] font-bold text-gray-600">{realSlots.length}/{capacity}</span>
+                        <span className="text-[8px] font-bold text-gray-600">{realSlots.length}/3</span>
                       </div>
 
                       <div className="flex-1 flex flex-wrap gap-2 items-start">
@@ -667,20 +593,15 @@ export default function App() {
                             )}
                           </div>
                         )}
-                        {!blocked && blockedSlots > 0 && (
-                          <div className="flex items-center gap-2 bg-slate-600/60 border border-slate-500 px-4 py-3 rounded-2xl">
-                            <Lock size={14} className="text-slate-300"/>
-                            <span className="text-[10px] font-black text-slate-200 uppercase">{blockedSlots} vaga(s) bloqueada(s)</span>
-                          </div>
-                        )}
 
-                        {/* Slots reais */}
+                        {/* Slots reais — MELHORIA 2: nomes sempre visíveis, fundo colorido */}
                         {!blocked && realSlots.map(s => {
                           const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                           const isMine = s.studentId === user.id;
                           if (user.role !== 'admin' && !isMine) return null;
                           return (
                             <div key={s.id} className={`relative group ${theme.bg} border ${theme.border} px-4 py-3 rounded-2xl min-w-[120px]`}>
+                              {/* MELHORIA 2: nome sempre visível com contraste */}
                               <span className="block text-[11px] font-black text-white uppercase truncate max-w-[130px]">{s.name}</span>
                               <span className={`text-[8px] font-black uppercase text-white/70`}>{theme.label}</span>
 
@@ -700,18 +621,17 @@ export default function App() {
                           );
                         })}
 
-                        {/* Controles admin */}
-                        {!blocked && user.role === 'admin' && (
+                        {/* Botão adicionar (admin) */}
+                        {!blocked && user.role === 'admin' && realSlots.length < 3 && (
                           <div className="flex gap-2">
-                            {realSlots.length < capacity && <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>}
+                            <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>
+                            {/* MELHORIA 6: Botão bloquear horário */}
                             <button onClick={() => handleToggleBlock(hour, selectedDay)} title="Bloquear horário" className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex items-center justify-center text-slate-700 hover:text-slate-400 hover:border-slate-500 transition-all"><Lock size={16}/></button>
-                            <button onClick={() => handleSetPartialBlock(hour, selectedDay, blockedSlots === 1 ? 0 : 1)} title="Bloquear 1 vaga" className="px-3 h-14 rounded-2xl border border-dashed border-slate-700 text-[10px] font-black text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-all">B1</button>
-                            <button onClick={() => handleSetPartialBlock(hour, selectedDay, blockedSlots === 2 ? 0 : 2)} title="Bloquear 2 vagas" className="px-3 h-14 rounded-2xl border border-dashed border-slate-700 text-[10px] font-black text-slate-500 hover:text-slate-300 hover:border-slate-500 transition-all">B2</button>
                           </div>
                         )}
 
                         {/* Reposição (aluno) */}
-                        {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < capacity && (user.credits || 0) > 0 && (
+                        {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < 3 && (user.credits || 0) > 0 && (
                           <button onClick={() => handleReposicao(hour)} className="w-14 h-14 rounded-2xl border border-dashed border-purple-500/20 flex flex-col items-center justify-center text-purple-500/40 hover:text-purple-400 hover:border-purple-500/40 transition-all">
                             <RotateCcw size={16} className="mb-1"/><span className="text-[7px] font-black uppercase">Crédito</span>
                           </button>
@@ -736,7 +656,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sub-abas */}
+            {/* Sub-abas — MELHORIA 8 */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setAlunosSubTab('todos')}
                 className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-white text-black' : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
@@ -747,6 +667,131 @@ export default function App() {
                 <AlertTriangle size={12}/> Plano ao Fim ({alunosPlanoAoFim.length})
               </button>
             </div>
+
+            {/* Lista de alunos */}
+            {(() => {
+              const lista = (alunosSubTab === 'planoAoFim' ? alunosPlanoAoFim : students)
+                .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {lista.map(s => {
+                    const daysLeft = getDaysUntilEnd(s.endDate);
+                    const isExpiring = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
+                    // MELHORIA 10: horários fixos
+                    const fixedScheds = (s.fixedSchedules || []).map(fs => `${fs.day.substring(0,3)} ${fs.hour}`).join(' • ');
+
+                    return (
+                      <div key={s.id} className={`bg-[#11141a] p-5 rounded-[2rem] border transition-all group relative ${isExpiring ? 'border-rose-500/40 shadow-lg shadow-rose-500/10' : 'border-white/5 hover:border-emerald-500/30'}`}>
+                        {isExpiring && (
+                          <div className="absolute top-0 left-0 right-0 bg-rose-500/20 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
+                            <AlertTriangle size={10} className="text-rose-400"/>
+                            <span className="text-[9px] font-black text-rose-400 uppercase">Plano acaba em {daysLeft === 0 ? 'hoje' : `${daysLeft}d`}</span>
+                          </div>
+                        )}
+                        <div className={`${isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
+                          <div className="flex items-start gap-3 mb-3 cursor-pointer">
+                            <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 font-black text-lg shrink-0">{s.name.charAt(0)}</div>
+                            <div className="flex-1 min-w-0">
+                              {/* MELHORIA 2: nome com boa visibilidade */}
+                              <h3 className="font-black uppercase text-sm text-white truncate">{s.name}</h3>
+                              <p className="text-[9px] text-gray-500 font-bold uppercase">{s.plan} • {s.frequencyLabel}</p>
+                            </div>
+                          </div>
+
+                          {/* MELHORIA 10: horários fixos visíveis no card */}
+                          {fixedScheds && (
+                            <div className="bg-white/5 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+                              <Clock size={10} className="text-emerald-500 shrink-0"/>
+                              <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider truncate">{fixedScheds}</span>
+                            </div>
+                          )}
+
+                          <div className="space-y-1 pt-2 border-t border-white/5">
+                            <div className="flex justify-between text-[8px] font-black uppercase">
+                              <span className="text-gray-600">Início</span>
+                              <span className="text-white">{s.startDate ? new Date(s.startDate).toLocaleDateString() : '---'}</span>
+                            </div>
+                            <div className="flex justify-between text-[8px] font-black uppercase">
+                              <span className="text-gray-600">Fim</span>
+                              <span className={isExpiring ? 'text-rose-400' : 'text-emerald-500'}>{s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botões de ação — linha 1: Prontuário + Anexos */}
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
+                          <button onClick={() => setShowProntuarioId(s.id)} title="Prontuário"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-purple-500/20 hover:text-purple-400 transition-all text-[9px] font-black uppercase">
+                            <BookOpen size={12}/> Prontuário
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setShowAnexosId(s.id); }} title="Anexos"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all text-[9px] font-black uppercase">
+                            <Paperclip size={12}/> Anexos
+                          </button>
+                        </div>
+                        {/* Linha 2: Editar + Excluir */}
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={e => { e.stopPropagation(); setEditStudentData(JSON.parse(JSON.stringify(s))); }} title="Editar"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all text-[9px] font-black uppercase">
+                            <Edit3 size={12}/> Editar
+                          </button>
+                          <button onClick={e => handleDeleteStudent(e, s.id, s.name)} title="Excluir"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all text-[9px] font-black uppercase">
+                            <Trash2 size={12}/> Excluir
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {lista.length === 0 && (
+                    <div className="col-span-full text-center py-16 text-gray-600">
+                      <Users size={32} className="mx-auto mb-3 opacity-30"/>
+                      <p className="text-[10px] font-black uppercase">Nenhum aluno encontrado</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ===== ABA DASHBOARD ===== */}
+        {activeTab === 'dashboard' && user.role === 'admin' && (
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6">Dashboard</h1>
+
+            {/* Sub-abas — MELHORIA 4 */}
+            <div className="flex gap-2 mb-8 overflow-x-auto pb-1 no-scrollbar">
+              {[
+                { key: 'geral',    label: 'Geral',    color: 'bg-white text-black' },
+                { key: 'andriele', label: 'Andriele · Manhã', color: 'bg-amber-500 text-black' },
+                { key: 'jessica',  label: 'Jessica · Tarde',  color: 'bg-blue-500 text-black' },
+              ].map(t => (
+                <button key={t.key} onClick={() => setDashSubTab(t.key)}
+                  className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase whitespace-nowrap transition-all ${dashSubTab === t.key ? t.color : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Dashboard Geral */}
+            {dashSubTab === 'geral' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard label="Agendados"    value={metrics.pendentes}  color="text-gray-400"   icon={<Clock size={22}/>} />
+                  <StatCard label="Presenças"    value={metrics.concluidas} color="text-emerald-500" icon={<CheckCircle2 size={22}/>} />
+                  <StatCard label="Faltas"       value={metrics.faltas}     color="text-rose-500"   icon={<AlertCircle size={22}/>} />
+                  <StatCard label="Desmarcações" value={metrics.desmarcados}color="text-orange-500" icon={<CalendarX size={22}/>} />
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                  <StatCard label="Reposições"   value={metrics.reposicao}    color="text-purple-400" icon={<RotateCcw size={22}/>} />
+                  <StatCard label="Experimentais"value={metrics.experimental} color="text-amber-400"  icon={<FlaskConical size={22}/>} />
+                  <StatCard label="Total Alunos" value={metrics.alunos}       color="text-blue-500"   icon={<Users size={22}/>} />
+                </div>
+              </div>
+            )}
+
+            {/* Dashboard Andriele — MELHORIA 4 */}
             {dashSubTab === 'andriele' && (
               <ProfDashboard
                 name={TURNO_MANHA_PROF}
@@ -951,7 +996,7 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ===== MODAL PRONTUÁRIO ===== */}
+      {/* ===== MODAL PRONTUÁRIO SEPARADO — MELHORIA 9 ===== */}
       {showProntuarioStudent && user.role === 'admin' && (
         <Modal title={`Prontuário — ${showProntuarioStudent.name}`} onClose={() => setShowProntuarioId(null)} size="lg">
           <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6">
@@ -989,56 +1034,6 @@ export default function App() {
             }
             {evolutions.filter(e => e.studentId === showProntuarioStudent.id).length === 0 && (
               <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhuma evolução registrada</p>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {/* ===== MODAL ANEXOS ===== */}
-      {showAnexosStudent && user.role === 'admin' && (
-        <Modal title={`Anexos — ${showAnexosStudent.name}`} onClose={() => setShowAnexosId(null)} size="lg">
-          <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6 border border-white/5">
-            <p className="text-[9px] font-black uppercase text-sky-400 mb-3">Adicionar novo arquivo</p>
-            <label className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-xl border border-dashed border-sky-500/30 text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-all text-[10px] font-black uppercase">
-              <ImagePlus size={14}/> {attachmentUploading ? 'Enviando...' : 'Selecionar arquivo'}
-              <input
-                type="file"
-                className="hidden"
-                disabled={attachmentUploading}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  await handleAttachmentUpload(file);
-                  e.target.value = '';
-                }}
-              />
-            </label>
-            {attachmentError && (
-              <p className="mt-3 text-[9px] font-black uppercase text-rose-400">{attachmentError}</p>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {showAnexosStudentFiles.map(file => (
-              <div key={file.id} className="bg-[#11141a] p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black text-white truncate">{file.fileName}</p>
-                  <p className="text-[8px] font-bold text-gray-500 uppercase">
-                    {file.fileType} • {(file.fileSize / 1024).toFixed(1)} KB • {new Date(file.timestamp).toLocaleString()}
-                  </p>
-                </div>
-                <a
-                  href={file.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 flex items-center gap-1 py-2 px-3 rounded-xl bg-white/5 text-gray-300 hover:bg-sky-500/20 hover:text-sky-300 transition-all text-[9px] font-black uppercase"
-                >
-                  <Download size={12}/> Abrir
-                </a>
-              </div>
-            ))}
-            {showAnexosStudentFiles.length === 0 && (
-              <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhum anexo registrado</p>
             )}
           </div>
         </Modal>
@@ -1103,14 +1098,6 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
         <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
           <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Faltas</p>
           <p className="text-4xl font-black text-rose-500 tracking-tighter">{data.totalFaltas}</p>
-        </div>
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Reposições</p>
-          <p className="text-4xl font-black text-purple-400 tracking-tighter">{data.totalReposicao}</p>
-        </div>
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Experimentais</p>
-          <p className="text-4xl font-black text-amber-400 tracking-tighter">{data.totalExperimental}</p>
         </div>
       </div>
     </div>
