@@ -305,7 +305,10 @@ export default function App() {
       const monthly = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(mesAtual) && s.status === 'concluida').length;
       const totalConcluidas = profSchedules.filter(s => s.status === 'concluida').length;
       const totalFaltas = profSchedules.filter(s => s.status === 'falta').length;
-      return { daily, monthly, totalConcluidas, totalFaltas, total: profSchedules.length };
+      const totalReposicao = profSchedules.filter(s => s.status === 'reposicao').length;
+      const totalExperimental = profSchedules.filter(s => s.status === 'experimental').length;
+      const totalDesmarcados = profSchedules.filter(s => s.status === 'desmarcado' || s.status === 'desmarcado_atrasado').length;
+      return { daily, monthly, totalConcluidas, totalFaltas, totalReposicao, totalExperimental, totalDesmarcados, total: profSchedules.length };
     };
     return {
       andriele: calcProf(TURNO_MANHA_PROF),
@@ -566,7 +569,7 @@ export default function App() {
                 {/* Badge do turno */}
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
                   {activeTurno === 'manha' ? <Sun size={12}/> : <Moon size={12}/>}
-                  {activeTurno === 'manha' ? `Manhã — Profissional: ${TURNO_MANHA_PROF}` : `Tarde — Profissional: ${TURNO_TARDE_PROF}`}
+                  {activeTurno === 'manha' ? `Manhã — Fisioterapeuta: ${TURNO_MANHA_PROF}` : `Tarde — Fisioterapeuta: ${TURNO_TARDE_PROF}`}
                 </div>
 
                 {activeHours.map(hour => {
@@ -621,12 +624,35 @@ export default function App() {
                           );
                         })}
 
-                        {/* Botão adicionar (admin) */}
+                        {/* Botão adicionar + bloquear vaga individual (admin) */}
                         {!blocked && user.role === 'admin' && realSlots.length < 3 && (
-                          <div className="flex gap-2">
-                            <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>
-                            {/* MELHORIA 6: Botão bloquear horário */}
-                            <button onClick={() => handleToggleBlock(hour, selectedDay)} title="Bloquear horário" className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex items-center justify-center text-slate-700 hover:text-slate-400 hover:border-slate-500 transition-all"><Lock size={16}/></button>
+                          <div className="flex gap-2 flex-wrap">
+                            <button onClick={() => setShowScheduleModal({ hour })}
+                              className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all gap-0.5">
+                              <Plus size={16}/>
+                              <span className="text-[7px] font-black uppercase">Agendar</span>
+                            </button>
+                            {/* Bloquear 1 vaga — cria slot "bloqueado" para uma vaga específica */}
+                            <button
+                              onClick={async () => {
+                                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
+                                  name: 'VAGA BLOQUEADA', studentId: null, day: selectedDay, hour,
+                                  status: 'bloqueado', createdBy: user.name, createdAt: new Date().toISOString()
+                                });
+                                await createLog(`Bloqueou 1 vaga em ${selectedDay} ${hour}`);
+                              }}
+                              title="Bloquear 1 vaga"
+                              className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-700 hover:text-slate-300 hover:border-slate-500 hover:bg-slate-700/20 transition-all gap-0.5">
+                              <Lock size={14}/>
+                              <span className="text-[7px] font-black uppercase">Vaga</span>
+                            </button>
+                            {/* Bloquear horário inteiro */}
+                            <button onClick={() => handleToggleBlock(hour, selectedDay)}
+                              title="Bloquear horário inteiro"
+                              className="w-14 h-14 rounded-2xl border border-dashed border-rose-900 flex flex-col items-center justify-center text-rose-900 hover:text-rose-400 hover:border-rose-600 hover:bg-rose-900/10 transition-all gap-0.5">
+                              <Lock size={14}/>
+                              <span className="text-[7px] font-black uppercase">Tudo</span>
+                            </button>
                           </div>
                         )}
 
@@ -690,11 +716,11 @@ export default function App() {
                         )}
                         <div className={`${isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
                           <div className="flex items-start gap-3 mb-3 cursor-pointer">
-                            <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 font-black text-lg shrink-0">{s.name.charAt(0)}</div>
+                            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-black font-black text-lg shrink-0">{s.name.charAt(0)}</div>
                             <div className="flex-1 min-w-0">
-                              {/* MELHORIA 2: nome com boa visibilidade */}
-                              <h3 className="font-black uppercase text-sm text-white truncate">{s.name}</h3>
-                              <p className="text-[9px] text-gray-500 font-bold uppercase">{s.plan} • {s.frequencyLabel}</p>
+                              {/* Nome completo visível — sem truncar, quebra linha se necessário */}
+                              <h3 className="font-black uppercase text-sm text-white leading-tight break-words">{s.name}</h3>
+                              <p className="text-[9px] text-emerald-500/70 font-bold uppercase mt-0.5">{s.plan} • {s.frequencyLabel}</p>
                             </div>
                           </div>
 
@@ -1038,11 +1064,165 @@ export default function App() {
           </div>
         </Modal>
       )}
+
+      {/* ===== MODAL ANEXOS — funcional com upload base64 ===== */}
+      {showAnexosStudent && user.role === 'admin' && (
+        <AnexosModal
+          student={showAnexosStudent}
+          onClose={() => setShowAnexosId(null)}
+          db={db}
+          appId={appId}
+          userName={user.name}
+          createLog={createLog}
+        />
+      )}
     </div>
   );
 }
 
 // ===== COMPONENTES AUXILIARES =====
+
+// ===== MODAL DE ANEXOS — upload base64 funcional =====
+function AnexosModal({ student, onClose, db, appId, userName, createLog }) {
+  const [anexos, setAnexos] = React.useState([]);
+  const [uploading, setUploading] = React.useState(false);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const ref = collection(db, 'artifacts', appId, 'public', 'data', 'anexos');
+    const unsub = onSnapshot(ref, snap => {
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAnexos(all.filter(a => a.studentId === student.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+    });
+    return () => unsub();
+  }, [student.id]);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const MAX = 2 * 1024 * 1024; // 2MB
+    if (file.size > MAX) { alert('Arquivo muito grande. Máximo: 2MB.'); return; }
+    setUploading(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'anexos'), {
+        studentId: student.id,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        data: base64,
+        uploadedBy: userName,
+        timestamp: new Date().toISOString()
+      });
+      await createLog(`Adicionou anexo "${file.name}" para ${student.name}`);
+    } catch (err) { console.error(err); alert('Erro ao enviar arquivo.'); }
+    finally { setUploading(false); e.target.value = ''; }
+  };
+
+  const handleDelete = async (anexoId, fileName) => {
+    if (!confirm(`Remover o arquivo "${fileName}"?`)) return;
+    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'anexos', anexoId));
+    await createLog(`Removeu anexo "${fileName}" de ${student.name}`);
+  };
+
+  const formatSize = (bytes) => bytes < 1024 ? `${bytes}B` : bytes < 1024*1024 ? `${(bytes/1024).toFixed(1)}KB` : `${(bytes/1024/1024).toFixed(1)}MB`;
+
+  const isImage = (type) => type && type.startsWith('image/');
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/95 z-[200] flex items-start justify-center p-4 backdrop-blur-xl overflow-y-auto">
+        <div className="bg-[#11141a] w-full max-w-2xl rounded-[2.5rem] p-6 lg:p-10 border border-white/10 shadow-2xl my-4">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h2 className="text-xl font-black italic uppercase">Anexos</h2>
+              <p className="text-[9px] text-gray-500 font-black uppercase mt-1">{student.name}</p>
+            </div>
+            <button onClick={onClose} className="text-gray-500 hover:text-white p-2"><X size={24}/></button>
+          </div>
+
+          {/* Área de upload */}
+          <div
+            onClick={() => inputRef.current?.click()}
+            className="border-2 border-dashed border-sky-500/30 bg-sky-500/5 rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-sky-500/60 hover:bg-sky-500/10 transition-all mb-6"
+          >
+            <Paperclip size={28} className="text-sky-400"/>
+            <p className="text-[11px] font-black uppercase text-sky-400">
+              {uploading ? 'Enviando...' : 'Clique para anexar arquivo'}
+            </p>
+            <p className="text-[9px] text-gray-600 font-bold">Imagens, PDF, DOC • Máx. 2MB</p>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*,.pdf,.doc,.docx"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+          </div>
+
+          {/* Lista de anexos */}
+          {anexos.length === 0 && !uploading && (
+            <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhum anexo ainda</p>
+          )}
+          <div className="space-y-3">
+            {anexos.map(a => (
+              <div key={a.id} className="bg-[#0a0c10] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group">
+                {/* Thumbnail para imagens */}
+                {isImage(a.fileType) ? (
+                  <img
+                    src={a.data} alt={a.fileName}
+                    className="w-12 h-12 rounded-xl object-cover shrink-0 cursor-pointer border border-white/10"
+                    onClick={() => setPreview(a)}
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center shrink-0 border border-white/10">
+                    <FileText size={20} className="text-gray-500"/>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-black text-white truncate">{a.fileName}</p>
+                  <p className="text-[8px] text-gray-600 font-bold uppercase">
+                    {formatSize(a.fileSize)} • {new Date(a.timestamp).toLocaleDateString()} • {a.uploadedBy}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <a href={a.data} download={a.fileName}
+                    className="p-2 bg-white/5 text-gray-500 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all"
+                    title="Baixar">
+                    <Download size={14}/>
+                  </a>
+                  <button onClick={() => handleDelete(a.id, a.fileName)}
+                    className="p-2 bg-white/5 text-gray-500 rounded-xl hover:bg-rose-500/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                    title="Remover">
+                    <Trash2 size={14}/>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Preview de imagem */}
+      {preview && (
+        <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+          <div className="relative max-w-3xl w-full">
+            <button onClick={() => setPreview(null)} className="absolute -top-10 right-0 text-gray-400 hover:text-white"><X size={24}/></button>
+            <img src={preview.data} alt={preview.fileName} className="w-full rounded-3xl border border-white/10 shadow-2xl"/>
+            <p className="text-center text-gray-500 text-[10px] font-black uppercase mt-3">{preview.fileName}</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function Modal({ title, children, onClose, size = 'md' }) {
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
@@ -1075,13 +1255,16 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
   const c = colorMap[turnoColor];
   return (
     <div className="space-y-6">
+      {/* Header da fisioterapeuta */}
       <div className={`${c.bg} border ${c.border} rounded-3xl p-6 flex items-center gap-4`}>
         <div className={`${c.badge} px-4 py-2 rounded-2xl font-black text-[10px] uppercase`}>{turno}</div>
         <div>
           <h3 className="font-black text-white italic text-lg uppercase">{name}</h3>
-          <p className="text-[9px] text-gray-500 font-black uppercase">Turno da {turno}</p>
+          <p className="text-[9px] text-gray-500 font-black uppercase">Fisioterapeuta — Turno da {turno}</p>
         </div>
       </div>
+
+      {/* Atendimentos do dia e mensal */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
           <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Atend. Hoje</p>
@@ -1091,13 +1274,41 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
           <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Atend. Mensal</p>
           <p className={`text-5xl font-black ${c.text} tracking-tighter`}>{data.monthly}</p>
         </div>
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Presenças</p>
+      </div>
+
+      {/* Totais detalhados */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Presenças</p>
           <p className="text-4xl font-black text-emerald-500 tracking-tighter">{data.totalConcluidas}</p>
         </div>
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Faltas</p>
+        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Faltas</p>
           <p className="text-4xl font-black text-rose-500 tracking-tighter">{data.totalFaltas}</p>
+        </div>
+        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Desmarcações</p>
+          <p className="text-4xl font-black text-orange-500 tracking-tighter">{data.totalDesmarcados}</p>
+        </div>
+        {/* Reposição — ITEM 3/6 */}
+        <div className="bg-purple-500/10 p-5 rounded-3xl border border-purple-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <RotateCcw size={12} className="text-purple-400"/>
+            <p className="text-[9px] font-black uppercase text-purple-400">Reposições</p>
+          </div>
+          <p className="text-4xl font-black text-purple-400 tracking-tighter">{data.totalReposicao}</p>
+        </div>
+        {/* Experimental — ITEM 3/6 */}
+        <div className="bg-amber-500/10 p-5 rounded-3xl border border-amber-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <FlaskConical size={12} className="text-amber-400"/>
+            <p className="text-[9px] font-black uppercase text-amber-400">Experimentais</p>
+          </div>
+          <p className="text-4xl font-black text-amber-400 tracking-tighter">{data.totalExperimental}</p>
+        </div>
+        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Sessões</p>
+          <p className={`text-4xl font-black ${c.text} tracking-tighter`}>{data.total}</p>
         </div>
       </div>
     </div>
