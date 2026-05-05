@@ -5,7 +5,7 @@ import {
   History, BarChart3, CalendarX, UserPlus, Fingerprint, MinusCircle,
   Edit3, Save, ArrowRight, ShieldCheck, Zap, CalendarDays, Home,
   Cake, Lock, Unlock, ChevronDown, ChevronUp, Sun, Moon,
-  AlertTriangle, Eye, User, BookOpen
+  AlertTriangle, Eye, User, BookOpen, Paperclip, ImagePlus, Download
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import {
@@ -95,6 +95,7 @@ export default function App() {
   const [editStudentData, setEditStudentData] = useState(null);
   const [showStudentDetailsId, setShowStudentDetailsId] = useState(null);
   const [showProntuarioId, setShowProntuarioId] = useState(null);
+  const [showAnexosId, setShowAnexosId] = useState(null);
   const [showScheduleModal, setShowScheduleModal] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newEvolution, setNewEvolution] = useState('');
@@ -327,6 +328,7 @@ export default function App() {
 
   const showStudentDetails = useMemo(() => students.find(s => s.id === showStudentDetailsId), [students, showStudentDetailsId]);
   const showProntuarioStudent = useMemo(() => students.find(s => s.id === showProntuarioId), [students, showProntuarioId]);
+  const showAnexosStudent = useMemo(() => students.find(s => s.id === showAnexosId), [students, showAnexosId]);
 
   // Alunos com plano próximo ao fim (≤3 dias)
   const alunosPlanoAoFim = useMemo(() => students.filter(s => {
@@ -716,24 +718,26 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* MELHORIA 9: Botões de ação separados e visíveis */}
+                        {/* Botões de ação — linha 1: Prontuário + Anexos */}
                         <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                          <button onClick={() => setShowStudentDetailsId(s.id)} title="Ver perfil"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500/20 hover:text-emerald-400 transition-all text-[9px] font-black uppercase">
-                            <Eye size={12}/> Perfil
-                          </button>
-                          {/* MELHORIA 9: Prontuário separado */}
                           <button onClick={() => setShowProntuarioId(s.id)} title="Prontuário"
                             className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-purple-500/20 hover:text-purple-400 transition-all text-[9px] font-black uppercase">
                             <BookOpen size={12}/> Prontuário
                           </button>
+                          <button onClick={e => { e.stopPropagation(); setShowAnexosId(s.id); }} title="Anexos"
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all text-[9px] font-black uppercase">
+                            <Paperclip size={12}/> Anexos
+                          </button>
+                        </div>
+                        {/* Linha 2: Editar + Excluir */}
+                        <div className="flex gap-2 mt-2">
                           <button onClick={e => { e.stopPropagation(); setEditStudentData(JSON.parse(JSON.stringify(s))); }} title="Editar"
-                            className="py-2 px-3 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all">
-                            <Edit3 size={13}/>
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all text-[9px] font-black uppercase">
+                            <Edit3 size={12}/> Editar
                           </button>
                           <button onClick={e => handleDeleteStudent(e, s.id, s.name)} title="Excluir"
-                            className="py-2 px-3 bg-white/5 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all">
-                            <Trash2 size={13}/>
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all text-[9px] font-black uppercase">
+                            <Trash2 size={12}/> Excluir
                           </button>
                         </div>
                       </div>
