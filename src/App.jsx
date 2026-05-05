@@ -13,6 +13,7 @@ import {
   deleteDoc, updateDoc, increment
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM",
@@ -26,6 +27,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-studio-v1';
 
 const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
@@ -82,6 +84,7 @@ export default function App() {
   const [students, setStudents] = useState([]);
   const [logs, setLogs] = useState([]);
   const [evolutions, setEvolutions] = useState([]);
+  const [attachments, setAttachments] = useState([]);
   const [loginCpf, setLoginCpf] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -102,6 +105,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [alunosSubTab, setAlunosSubTab] = useState('todos'); // 'todos' | 'planoAoFim'
   const [dashSubTab, setDashSubTab] = useState('geral'); // 'geral' | 'andriele' | 'jessica'
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
 
   const [newStudent, setNewStudent] = useState({
     name: '', cpf: '', birthDate: '', email: '', address: '', plan: 'Mensal',
@@ -128,7 +132,7 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseUser) return;
-    const refs = ['schedules', 'students', 'logs', 'evolutions'].map(c =>
+    const refs = ['schedules', 'students', 'logs', 'evolutions', 'attachments'].map(c =>
       collection(db, 'artifacts', appId, 'public', 'data', c)
     );
     const unsubSchedules = onSnapshot(refs[0], snap => setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
@@ -144,7 +148,8 @@ export default function App() {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 80));
     }, err => console.error(err));
     const unsubEvols = onSnapshot(refs[3], snap => setEvolutions(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
-    return () => { unsubSchedules(); unsubStudents(); unsubLogs(); unsubEvols(); };
+    const unsubAttachments = onSnapshot(refs[4], snap => setAttachments(snap.docs.map(d => ({ id: d.id, ...d.data() }))), err => console.error(err));
+    return () => { unsubSchedules(); unsubStudents(); unsubLogs(); unsubEvols(); unsubAttachments(); };
   }, [firebaseUser, user?.id]);
 
   // Notificação de plano próximo ao fim — gera log automático
@@ -305,7 +310,9 @@ export default function App() {
       const monthly = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(mesAtual) && s.status === 'concluida').length;
       const totalConcluidas = profSchedules.filter(s => s.status === 'concluida').length;
       const totalFaltas = profSchedules.filter(s => s.status === 'falta').length;
-      return { daily, monthly, totalConcluidas, totalFaltas, total: profSchedules.length };
+      const totalReposicao = profSchedules.filter(s => s.status === 'reposicao').length;
+      const totalExperimental = profSchedules.filter(s => s.status === 'experimental').length;
+      return { daily, monthly, totalConcluidas, totalFaltas, totalReposicao, totalExperimental, total: profSchedules.length };
     };
     return {
       andriele: calcProf(TURNO_MANHA_PROF),
@@ -329,6 +336,37 @@ export default function App() {
   const showStudentDetails = useMemo(() => students.find(s => s.id === showStudentDetailsId), [students, showStudentDetailsId]);
   const showProntuarioStudent = useMemo(() => students.find(s => s.id === showProntuarioId), [students, showProntuarioId]);
   const showAnexosStudent = useMemo(() => students.find(s => s.id === showAnexosId), [students, showAnexosId]);
+  const showAnexosStudentFiles = useMemo(
+    () => attachments.filter(a => a.studentId === showAnexosId).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
+    [attachments, showAnexosId]
+  );
+
+  const handleAttachmentUpload = async (file) => {
+    if (!showAnexosStudent || !file || !firebaseUser || attachmentUploading) return;
+    setAttachmentUploading(true);
+    try {
+      const safeName = `${Date.now()}-${file.name}`.replace(/\s+/g, '_');
+      const storagePath = `artifacts/${appId}/attachments/${showAnexosStudent.id}/${safeName}`;
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'attachments'), {
+        studentId: showAnexosStudent.id,
+        studentName: showAnexosStudent.name,
+        fileName: file.name,
+        fileType: file.type || 'desconhecido',
+        fileSize: file.size || 0,
+        url,
+        createdBy: user?.name || 'Sistema',
+        timestamp: new Date().toISOString()
+      });
+      await createLog(`Adicionou anexo para ${showAnexosStudent.name}: ${file.name}`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAttachmentUploading(false);
+    }
+  };
 
   // Alunos com plano próximo ao fim (≤3 dias)
   const alunosPlanoAoFim = useMemo(() => students.filter(s => {
@@ -360,7 +398,7 @@ export default function App() {
             <div className="h-px w-8 bg-emerald-500/30" />
           </div>
         </div>
-        <div className="space-y-6">
+                <div className="space-y-6">
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none text-gray-500 group-focus-within:text-emerald-500 transition-colors">
               <ShieldCheck size={20} />
@@ -461,7 +499,7 @@ export default function App() {
               ))}
             </div>
 
-            {/* Seletor de turno — MELHORIA 1 */}
+            {/* Seletor de turno */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setActiveTurno('manha')}
                 className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'manha' ? 'bg-amber-500 text-black' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
@@ -474,7 +512,6 @@ export default function App() {
               ><Calendar size={14}/> Semana</button>
             </div>
 
-            {/* ===== MELHORIA 5: VISÃO SEMANAL ===== */}
             {activeTurno === 'semana' && (
               <div className="overflow-x-auto rounded-3xl border border-white/5 bg-[#11141a]">
                 <table className="w-full min-w-[700px] text-[10px]">
@@ -487,7 +524,6 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Separador Manhã */}
                     <tr><td colSpan={6} className="bg-amber-500/10 py-1 px-4 text-[9px] font-black uppercase text-amber-400 tracking-widest border-y border-amber-500/20">
                       <Sun size={10} className="inline mr-1"/>Manhã — 07h às 12h
                     </td></tr>
@@ -521,7 +557,6 @@ export default function App() {
                         })}
                       </tr>
                     ))}
-                    {/* Separador Tarde */}
                     <tr><td colSpan={6} className="bg-blue-500/10 py-1 px-4 text-[9px] font-black uppercase text-blue-400 tracking-widest border-y border-blue-500/20">
                       <Moon size={10} className="inline mr-1"/>Tarde — 15h às 20h
                     </td></tr>
@@ -559,14 +594,11 @@ export default function App() {
                 </table>
               </div>
             )}
-
-            {/* VISÃO POR TURNO (manhã ou tarde) */}
-            {activeTurno !== 'semana' && (
+                        {activeTurno !== 'semana' && (
               <div className="space-y-3">
-                {/* Badge do turno */}
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
                   {activeTurno === 'manha' ? <Sun size={12}/> : <Moon size={12}/>}
-                  {activeTurno === 'manha' ? `Manhã — Profissional: ${TURNO_MANHA_PROF}` : `Tarde — Profissional: ${TURNO_TARDE_PROF}`}
+                  {activeTurno === 'manha' ? `Manhã — Fisioterapeuta: ${TURNO_MANHA_PROF}` : `Tarde — Fisioterapeuta: ${TURNO_TARDE_PROF}`}
                 </div>
 
                 {activeHours.map(hour => {
@@ -583,7 +615,6 @@ export default function App() {
                       </div>
 
                       <div className="flex-1 flex flex-wrap gap-2 items-start">
-                        {/* Slot bloqueado */}
                         {blocked && (
                           <div className="flex items-center gap-2 bg-slate-700/60 border border-slate-600 px-4 py-3 rounded-2xl">
                             <Lock size={14} className="text-slate-400"/>
@@ -594,14 +625,12 @@ export default function App() {
                           </div>
                         )}
 
-                        {/* Slots reais — MELHORIA 2: nomes sempre visíveis, fundo colorido */}
                         {!blocked && realSlots.map(s => {
                           const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
                           const isMine = s.studentId === user.id;
                           if (user.role !== 'admin' && !isMine) return null;
                           return (
                             <div key={s.id} className={`relative group ${theme.bg} border ${theme.border} px-4 py-3 rounded-2xl min-w-[120px]`}>
-                              {/* MELHORIA 2: nome sempre visível com contraste */}
                               <span className="block text-[11px] font-black text-white uppercase truncate max-w-[130px]">{s.name}</span>
                               <span className={`text-[8px] font-black uppercase text-white/70`}>{theme.label}</span>
 
@@ -621,16 +650,13 @@ export default function App() {
                           );
                         })}
 
-                        {/* Botão adicionar (admin) */}
                         {!blocked && user.role === 'admin' && realSlots.length < 3 && (
                           <div className="flex gap-2">
                             <button onClick={() => setShowScheduleModal({ hour })} className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all"><Plus size={18}/></button>
-                            {/* MELHORIA 6: Botão bloquear horário */}
                             <button onClick={() => handleToggleBlock(hour, selectedDay)} title="Bloquear horário" className="w-14 h-14 rounded-2xl border border-dashed border-slate-700 flex items-center justify-center text-slate-700 hover:text-slate-400 hover:border-slate-500 transition-all"><Lock size={16}/></button>
                           </div>
                         )}
 
-                        {/* Reposição (aluno) */}
                         {!blocked && user.role !== 'admin' && !userScheduled && realSlots.length < 3 && (user.credits || 0) > 0 && (
                           <button onClick={() => handleReposicao(hour)} className="w-14 h-14 rounded-2xl border border-dashed border-purple-500/20 flex flex-col items-center justify-center text-purple-500/40 hover:text-purple-400 hover:border-purple-500/40 transition-all">
                             <RotateCcw size={16} className="mb-1"/><span className="text-[7px] font-black uppercase">Crédito</span>
@@ -645,7 +671,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== ABA ALUNOS ===== */}
         {activeTab === 'alunos' && user.role === 'admin' && (
           <div>
             <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
@@ -656,7 +681,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sub-abas — MELHORIA 8 */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setAlunosSubTab('todos')}
                 className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-white text-black' : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
@@ -668,7 +692,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Lista de alunos */}
             {(() => {
               const lista = (alunosSubTab === 'planoAoFim' ? alunosPlanoAoFim : students)
                 .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -677,7 +700,6 @@ export default function App() {
                   {lista.map(s => {
                     const daysLeft = getDaysUntilEnd(s.endDate);
                     const isExpiring = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
-                    // MELHORIA 10: horários fixos
                     const fixedScheds = (s.fixedSchedules || []).map(fs => `${fs.day.substring(0,3)} ${fs.hour}`).join(' • ');
 
                     return (
@@ -692,13 +714,11 @@ export default function App() {
                           <div className="flex items-start gap-3 mb-3 cursor-pointer">
                             <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 font-black text-lg shrink-0">{s.name.charAt(0)}</div>
                             <div className="flex-1 min-w-0">
-                              {/* MELHORIA 2: nome com boa visibilidade */}
-                              <h3 className="font-black uppercase text-sm text-white truncate">{s.name}</h3>
-                              <p className="text-[9px] text-gray-500 font-bold uppercase">{s.plan} • {s.frequencyLabel}</p>
+                              <h3 className="font-black uppercase text-base text-white leading-tight break-words">{s.name}</h3>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{s.plan} • {s.frequencyLabel}</p>
                             </div>
                           </div>
 
-                          {/* MELHORIA 10: horários fixos visíveis no card */}
                           {fixedScheds && (
                             <div className="bg-white/5 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
                               <Clock size={10} className="text-emerald-500 shrink-0"/>
@@ -718,7 +738,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Botões de ação — linha 1: Prontuário + Anexos */}
                         <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
                           <button onClick={() => setShowProntuarioId(s.id)} title="Prontuário"
                             className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-purple-500/20 hover:text-purple-400 transition-all text-[9px] font-black uppercase">
@@ -729,7 +748,6 @@ export default function App() {
                             <Paperclip size={12}/> Anexos
                           </button>
                         </div>
-                        {/* Linha 2: Editar + Excluir */}
                         <div className="flex gap-2 mt-2">
                           <button onClick={e => { e.stopPropagation(); setEditStudentData(JSON.parse(JSON.stringify(s))); }} title="Editar"
                             className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all text-[9px] font-black uppercase">
@@ -755,12 +773,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== ABA DASHBOARD ===== */}
         {activeTab === 'dashboard' && user.role === 'admin' && (
           <div>
             <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6">Dashboard</h1>
 
-            {/* Sub-abas — MELHORIA 4 */}
             <div className="flex gap-2 mb-8 overflow-x-auto pb-1 no-scrollbar">
               {[
                 { key: 'geral',    label: 'Geral',    color: 'bg-white text-black' },
@@ -774,7 +790,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* Dashboard Geral */}
             {dashSubTab === 'geral' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -791,7 +806,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Dashboard Andriele — MELHORIA 4 */}
             {dashSubTab === 'andriele' && (
               <ProfDashboard
                 name={TURNO_MANHA_PROF}
@@ -801,7 +815,6 @@ export default function App() {
               />
             )}
 
-            {/* Dashboard Jessica — MELHORIA 4 */}
             {dashSubTab === 'jessica' && (
               <ProfDashboard
                 name={TURNO_TARDE_PROF}
@@ -813,7 +826,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== ABA HISTÓRICO — MELHORIA 7 ===== */}
         {activeTab === 'historico' && user.role === 'admin' && (
           <div className="max-w-4xl mx-auto space-y-2">
             <h1 className="text-2xl font-black uppercase italic mb-6">Logs do Sistema</h1>
@@ -836,7 +848,6 @@ export default function App() {
         )}
       </main>
 
-      {/* ===== MODAL DE MATRÍCULA ===== */}
       {showAddStudent && (
         <Modal title="Nova Matrícula" onClose={() => setShowAddStudent(false)}>
           <form onSubmit={handleAddStudent} className="space-y-6">
@@ -888,7 +899,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ===== MODAL DE EDIÇÃO ===== */}
       {editStudentData && (
         <Modal title="Editar Aluno" onClose={() => setEditStudentData(null)}>
           <form onSubmit={handleEditStudent} className="space-y-6">
@@ -924,7 +934,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ===== MODAL AGENDAMENTO (ADMIN) ===== */}
       {showScheduleModal && user.role === 'admin' && (
         <Modal title={`Agendar Sessão — ${selectedDay} ${showScheduleModal.hour}`} onClose={() => { setShowScheduleModal(null); setScheduleForm({ studentId: '', manualName: '', status: 'pendente' }); }} size="sm">
           <form onSubmit={async (e) => {
@@ -963,7 +972,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ===== MODAL DETALHES DO ALUNO ===== */}
       {showStudentDetails && user.role === 'admin' && (
         <Modal title={showStudentDetails.name} onClose={() => setShowStudentDetailsId(null)} size="md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -996,7 +1004,6 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ===== MODAL PRONTUÁRIO SEPARADO — MELHORIA 9 ===== */}
       {showProntuarioStudent && user.role === 'admin' && (
         <Modal title={`Prontuário — ${showProntuarioStudent.name}`} onClose={() => setShowProntuarioId(null)} size="lg">
           <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6">
@@ -1038,11 +1045,55 @@ export default function App() {
           </div>
         </Modal>
       )}
+
+      {showAnexosStudent && user.role === 'admin' && (
+        <Modal title={`Anexos — ${showAnexosStudent.name}`} onClose={() => setShowAnexosId(null)} size="lg">
+          <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6 border border-white/5">
+            <p className="text-[9px] font-black uppercase text-sky-400 mb-3">Adicionar novo arquivo</p>
+            <label className="w-full flex items-center justify-center gap-2 px-4 py-4 rounded-xl border border-dashed border-sky-500/30 text-sky-400 hover:bg-sky-500/10 cursor-pointer transition-all text-[10px] font-black uppercase">
+              <ImagePlus size={14}/> {attachmentUploading ? 'Enviando...' : 'Selecionar arquivo'}
+              <input
+                type="file"
+                className="hidden"
+                disabled={attachmentUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  await handleAttachmentUpload(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="space-y-3">
+            {showAnexosStudentFiles.map(file => (
+              <div key={file.id} className="bg-[#11141a] p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black text-white truncate">{file.fileName}</p>
+                  <p className="text-[8px] font-bold text-gray-500 uppercase">
+                    {file.fileType} • {(file.fileSize / 1024).toFixed(1)} KB • {new Date(file.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                <a
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 flex items-center gap-1 py-2 px-3 rounded-xl bg-white/5 text-gray-300 hover:bg-sky-500/20 hover:text-sky-300 transition-all text-[9px] font-black uppercase"
+                >
+                  <Download size={12}/> Abrir
+                </a>
+              </div>
+            ))}
+            {showAnexosStudentFiles.length === 0 && (
+              <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhum anexo registrado</p>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
-// ===== COMPONENTES AUXILIARES =====
 
 function Modal({ title, children, onClose, size = 'md' }) {
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
@@ -1098,6 +1149,14 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
         <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
           <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Faltas</p>
           <p className="text-4xl font-black text-rose-500 tracking-tighter">{data.totalFaltas}</p>
+        </div>
+        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Reposições</p>
+          <p className="text-4xl font-black text-purple-400 tracking-tighter">{data.totalReposicao}</p>
+        </div>
+        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
+          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Experimentais</p>
+          <p className="text-4xl font-black text-amber-400 tracking-tighter">{data.totalExperimental}</p>
         </div>
       </div>
     </div>
