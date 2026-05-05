@@ -1,4 +1,3 @@
-// BLOCO 1/3 — src/App.jsx (linhas 1–420)
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, LogOut, Plus, X, CheckCircle2, AlertCircle, Clock,
@@ -441,7 +440,6 @@ export default function App() {
             />
           </div>
           {loginError && (
-            // BLOCO 2/3 — src/App.jsx (linhas 421–840)
             <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-3">
               <AlertCircle size={16} className="text-rose-500" />
               <p className="text-rose-500 text-[10px] font-black uppercase">{loginError}</p>
@@ -749,7 +747,6 @@ export default function App() {
                 <AlertTriangle size={12}/> Plano ao Fim ({alunosPlanoAoFim.length})
               </button>
             </div>
-            // BLOCO 3/3 — src/App.jsx (linhas 841–1235)
             {dashSubTab === 'andriele' && (
               <ProfDashboard
                 name={TURNO_MANHA_PROF}
