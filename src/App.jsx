@@ -187,25 +187,26 @@ export default function App() {
         }
       }
 
-      // Plano expirado (days < 0) — remove todas as aulas fixas pendentes do aluno
+      // Plano expirado (days < 0) — remove TODOS os agendamentos pendentes do aluno da agenda
       if (days !== null && days < 0) {
         const removeKey = `expiry_removed_${s.id}_${s.endDate}`;
         const alreadyRemoved = logs.some(l => l.logKey === removeKey);
         if (!alreadyRemoved) {
           try {
-            // Busca todas as aulas fixas pendentes desse aluno
-            const fixedPending = schedules.filter(
-              sc => sc.studentId === s.id && sc.isFixed === true && sc.status === 'pendente'
+            // Remove qualquer agendamento pendente ou reposição futura do aluno
+            const toRemove = schedules.filter(
+              sc => sc.studentId === s.id && (sc.status === 'pendente' || sc.status === 'reposicao')
             );
-            for (const sc of fixedPending) {
+            for (const sc of toRemove) {
               await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', sc.id));
             }
-            if (fixedPending.length > 0) {
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-                action: `🔴 Plano de ${s.name} expirou — ${fixedPending.length} aula(s) fixa(s) removida(s) da agenda.`,
-                user: 'Sistema', timestamp: new Date().toISOString(), logKey: removeKey, type: 'expiry_removed'
-              });
-            }
+            // Gera log (mesmo que não haja agendamentos, registra a expiração)
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+              action: toRemove.length > 0
+                ? `🔴 Plano de ${s.name} expirou — ${toRemove.length} agendamento(s) removido(s) da agenda.`
+                : `🔴 Plano de ${s.name} expirou.`,
+              user: 'Sistema', timestamp: new Date().toISOString(), logKey: removeKey, type: 'expiry_removed'
+            });
           } catch (e) { console.error(e); }
         }
       }
@@ -351,14 +352,23 @@ export default function App() {
     const calcProf = (profName) => {
       const turnoHours = profName === TURNO_MANHA_PROF ? HOURS_MANHA : HOURS_TARDE;
       const profSchedules = schedules.filter(s => turnoHours.includes(s.hour));
-      const daily = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(hoje) && s.status === 'concluida').length;
-      const monthly = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(mesAtual) && s.status === 'concluida').length;
-      const totalConcluidas = profSchedules.filter(s => s.status === 'concluida').length;
-      const totalFaltas = profSchedules.filter(s => s.status === 'falta').length;
-      const totalReposicao = profSchedules.filter(s => s.status === 'reposicao').length;
-      const totalExperimental = profSchedules.filter(s => s.status === 'experimental').length;
-      const totalDesmarcados = profSchedules.filter(s => s.status === 'desmarcado' || s.status === 'desmarcado_atrasado').length;
-      return { daily, monthly, totalConcluidas, totalFaltas, totalReposicao, totalExperimental, totalDesmarcados, total: profSchedules.length };
+      const dailyList     = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(hoje) && s.status === 'concluida');
+      const monthlyList   = profSchedules.filter(s => s.createdAt && s.createdAt.startsWith(mesAtual) && s.status === 'concluida');
+      const concluidaList = profSchedules.filter(s => s.status === 'concluida');
+      const faltaList     = profSchedules.filter(s => s.status === 'falta');
+      const reposicaoList = profSchedules.filter(s => s.status === 'reposicao');
+      const experList     = profSchedules.filter(s => s.status === 'experimental');
+      const desmarc       = profSchedules.filter(s => s.status === 'desmarcado' || s.status === 'desmarcado_atrasado');
+      return {
+        daily: dailyList.length,         dailyList,
+        monthly: monthlyList.length,     monthlyList,
+        totalConcluidas: concluidaList.length, concluidaList,
+        totalFaltas: faltaList.length,         faltaList,
+        totalReposicao: reposicaoList.length,  reposicaoList,
+        totalExperimental: experList.length,   experList,
+        totalDesmarcados: desmarc.length,      desmarcList: desmarc,
+        total: profSchedules.length,           allList: profSchedules,
+      };
     };
     return {
       andriele: calcProf(TURNO_MANHA_PROF),
@@ -953,23 +963,25 @@ export default function App() {
               );
             })()}
 
-            {/* Dashboard Andriele — MELHORIA 4 */}
+            {/* Dashboard Andriele */}
             {dashSubTab === 'andriele' && (
               <ProfDashboard
                 name={TURNO_MANHA_PROF}
                 turno="Manhã"
                 turnoColor="amber"
                 data={metricsByProf.andriele}
+                onDrill={(label, items) => setDashDrillDown({ label, items })}
               />
             )}
 
-            {/* Dashboard Jessica — MELHORIA 4 */}
+            {/* Dashboard Jessica */}
             {dashSubTab === 'jessica' && (
               <ProfDashboard
                 name={TURNO_TARDE_PROF}
                 turno="Tarde"
                 turnoColor="blue"
                 data={metricsByProf.jessica}
+                onDrill={(label, items) => setDashDrillDown({ label, items })}
               />
             )}
           </div>
@@ -1410,12 +1422,24 @@ function NavItem({ active, icon, label, onClick }) {
   );
 }
 
-function ProfDashboard({ name, turno, turnoColor, data }) {
+function ProfDashboard({ name, turno, turnoColor, data, onDrill }) {
   const colorMap = {
-    amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400', badge: 'bg-amber-500 text-black' },
-    blue:  { bg: 'bg-blue-500/10',  border: 'border-blue-500/20',  text: 'text-blue-400',  badge: 'bg-blue-500 text-white' },
+    amber: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-600', badge: 'bg-amber-500 text-black' },
+    blue:  { bg: 'bg-blue-500/10',  border: 'border-blue-500/20',  text: 'text-blue-600',  badge: 'bg-blue-500 text-white' },
   };
   const c = colorMap[turnoColor];
+
+  const card = (label, value, color, list, extraClass = '') => (
+    <div
+      onClick={() => onDrill(label, list)}
+      className={`bg-white p-5 rounded-3xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all ${extraClass}`}
+    >
+      <p className="text-[9px] font-black uppercase text-gray-400 mb-2">{label}</p>
+      <p className={`text-4xl font-black ${color} tracking-tighter`}>{value}</p>
+      <p className="text-[8px] text-gray-300 font-black uppercase mt-1">Ver detalhes</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header da fisioterapeuta */}
@@ -1427,52 +1451,30 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
         </div>
       </div>
 
-      {/* Atendimentos do dia e mensal */}
+      {/* Atendimentos do dia e mensal — cards grandes */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+        <div onClick={() => onDrill('Atend. Hoje', data.dailyList)}
+          className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all">
           <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Atend. Hoje</p>
           <p className={`text-5xl font-black ${c.text} tracking-tighter`}>{data.daily}</p>
+          <p className="text-[8px] text-gray-300 font-black uppercase mt-1">Ver detalhes</p>
         </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+        <div onClick={() => onDrill('Atend. Mensal', data.monthlyList)}
+          className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all">
           <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Atend. Mensal</p>
           <p className={`text-5xl font-black ${c.text} tracking-tighter`}>{data.monthly}</p>
+          <p className="text-[8px] text-gray-300 font-black uppercase mt-1">Ver detalhes</p>
         </div>
       </div>
 
-      {/* Totais detalhados */}
+      {/* Totais detalhados — todos clicáveis */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Presenças</p>
-          <p className="text-4xl font-black text-emerald-600 tracking-tighter">{data.totalConcluidas}</p>
-        </div>
-        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Faltas</p>
-          <p className="text-4xl font-black text-rose-600 tracking-tighter">{data.totalFaltas}</p>
-        </div>
-        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Desmarcações</p>
-          <p className="text-4xl font-black text-orange-600 tracking-tighter">{data.totalDesmarcados}</p>
-        </div>
-        {/* Reposição — ITEM 3/6 */}
-        <div className="bg-purple-500/10 p-5 rounded-3xl border border-purple-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <RotateCcw size={12} className="text-purple-400"/>
-            <p className="text-[9px] font-black uppercase text-purple-400">Reposições</p>
-          </div>
-          <p className="text-4xl font-black text-purple-400 tracking-tighter">{data.totalReposicao}</p>
-        </div>
-        {/* Experimental — ITEM 3/6 */}
-        <div className="bg-amber-500/10 p-5 rounded-3xl border border-amber-500/20">
-          <div className="flex items-center gap-2 mb-2">
-            <FlaskConical size={12} className="text-amber-400"/>
-            <p className="text-[9px] font-black uppercase text-amber-400">Experimentais</p>
-          </div>
-          <p className="text-4xl font-black text-amber-400 tracking-tighter">{data.totalExperimental}</p>
-        </div>
-        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Total Sessões</p>
-          <p className={`text-4xl font-black ${c.text} tracking-tighter`}>{data.total}</p>
-        </div>
+        {card('Presenças',    data.totalConcluidas,  'text-emerald-600', data.concluidaList)}
+        {card('Faltas',       data.totalFaltas,      'text-rose-600',    data.faltaList)}
+        {card('Desmarcações', data.totalDesmarcados, 'text-orange-600',  data.desmarcList)}
+        {card('Reposições',   data.totalReposicao,   'text-purple-600',  data.reposicaoList, 'border-purple-200')}
+        {card('Experimentais',data.totalExperimental,'text-amber-600',   data.experList,     'border-amber-200')}
+        {card('Total Sessões',data.total,            c.text,             data.allList)}
       </div>
     </div>
   );
