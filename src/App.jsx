@@ -82,8 +82,7 @@ const getDateForDay = (dayName) => {
   const target = dayMap[dayName];
   if (target === undefined) return '';
   const today = new Date();
-  const todayDay = today.getDay(); // 0=dom, 1=seg...
-  // Ajusta para semana atual (segunda a sexta)
+  const todayDay = today.getDay();
   const mondayOffset = todayDay === 0 ? -6 : 1 - todayDay;
   const monday = new Date(today);
   monday.setDate(today.getDate() + mondayOffset);
@@ -91,6 +90,8 @@ const getDateForDay = (dayName) => {
   targetDate.setDate(monday.getDate() + (target - 1));
   return targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 };
+
+export default function App() {
   const [user, setUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [activeTab, setActiveTab] = useState('agenda');
