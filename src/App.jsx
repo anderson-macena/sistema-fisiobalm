@@ -912,14 +912,14 @@ export default function App() {
               <InputGroup label="Início do Plano" type="date" value={newStudent.startDate} onChange={v => setNewStudent({...newStudent, startDate: v})} />
               <InputGroup label="Fim do Plano" type="date" value={newStudent.endDate} onChange={v => setNewStudent({...newStudent, endDate: v})} />
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-gray-600 ml-2">Plano</label>
-                <select className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-sm text-white" value={newStudent.plan} onChange={e => setNewStudent({...newStudent, plan: e.target.value})}>
+                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Plano</label>
+                <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 shadow-sm" value={newStudent.plan} onChange={e => setNewStudent({...newStudent, plan: e.target.value})}>
                   {PLANOS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-gray-600 ml-2">Frequência</label>
-                <select className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-sm text-white" value={newStudent.frequency} onChange={e => {
+                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Frequência</label>
+                <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 shadow-sm" value={newStudent.frequency} onChange={e => {
                   const count = Number(e.target.value);
                   const upd = Array.from({ length: count }).map((_, i) => newStudent.fixedSchedules[i] || { day: 'Segunda', hour: '07:00' });
                   setNewStudent({ ...newStudent, frequency: count, fixedSchedules: upd });
@@ -928,15 +928,15 @@ export default function App() {
                 </select>
               </div>
             </div>
-            <div className="p-6 bg-black/20 rounded-[2rem] border border-white/5">
-              <p className="text-[10px] font-black uppercase text-emerald-500 mb-4 tracking-widest">Horários Fixos</p>
+            <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-200">
+              <p className="text-[10px] font-black uppercase text-emerald-600 mb-4 tracking-widest">Horários Fixos</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {newStudent.fixedSchedules.map((sched, idx) => (
-                  <div key={idx} className="bg-[#1a1f26] p-4 rounded-xl border border-white/5 space-y-2">
-                    <select className="w-full bg-black/40 border border-white/5 rounded-lg p-2 text-xs text-white" value={sched.day} onChange={e => {
+                  <div key={idx} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                    <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900" value={sched.day} onChange={e => {
                       const copy = [...newStudent.fixedSchedules]; copy[idx].day = e.target.value; setNewStudent({...newStudent, fixedSchedules: copy});
                     }}>{DAYS.map(d => <option key={d} value={d}>{d}</option>)}</select>
-                    <select className="w-full bg-black/40 border border-white/5 rounded-lg p-2 text-xs text-white" value={sched.hour} onChange={e => {
+                    <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900" value={sched.hour} onChange={e => {
                       const copy = [...newStudent.fixedSchedules]; copy[idx].hour = e.target.value; setNewStudent({...newStudent, fixedSchedules: copy});
                     }}>{ALL_HOURS.map(h => <option key={h} value={h}>{h} — {isManha(h) ? 'Manhã' : 'Tarde'}</option>)}</select>
                   </div>
@@ -964,15 +964,15 @@ export default function App() {
               <InputGroup label="E-mail" type="email" value={editStudentData.email} onChange={v => setEditStudentData({...editStudentData, email: v})} />
               <InputGroup label="Endereço"       value={editStudentData.address}   onChange={v => setEditStudentData({...editStudentData, address: v})} />
             </div>
-            <div className="p-6 bg-black/20 rounded-[2rem] border border-white/5">
-              <p className="text-[10px] font-black uppercase text-emerald-500 mb-4 tracking-widest">Alterar Horários Fixos</p>
+            <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-200">
+              <p className="text-[10px] font-black uppercase text-emerald-600 mb-4 tracking-widest">Alterar Horários Fixos</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {editStudentData.fixedSchedules?.map((sched, idx) => (
-                  <div key={idx} className="bg-[#1a1f26] p-4 rounded-xl border border-white/5 space-y-2">
-                    <select className="w-full bg-black/40 border border-white/5 rounded-lg p-2 text-xs text-white" value={sched.day} onChange={e => {
+                  <div key={idx} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                    <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900" value={sched.day} onChange={e => {
                       const copy = [...editStudentData.fixedSchedules]; copy[idx].day = e.target.value; setEditStudentData({...editStudentData, fixedSchedules: copy});
                     }}>{DAYS.map(d => <option key={d} value={d}>{d}</option>)}</select>
-                    <select className="w-full bg-black/40 border border-white/5 rounded-lg p-2 text-xs text-white" value={sched.hour} onChange={e => {
+                    <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900" value={sched.hour} onChange={e => {
                       const copy = [...editStudentData.fixedSchedules]; copy[idx].hour = e.target.value; setEditStudentData({...editStudentData, fixedSchedules: copy});
                     }}>{ALL_HOURS.map(h => <option key={h} value={h}>{h} — {isManha(h) ? 'Manhã' : 'Tarde'}</option>)}</select>
                   </div>
@@ -1002,19 +1002,19 @@ export default function App() {
             setScheduleForm({ studentId: '', manualName: '', status: 'pendente' });
           }} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-gray-600 ml-1">Aluno Registrado</label>
-              <select className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-white text-xs" value={scheduleForm.studentId} onChange={e => setScheduleForm({...scheduleForm, studentId: e.target.value, manualName: ''})}>
+              <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Aluno Registrado</label>
+              <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-gray-900 text-xs shadow-sm" value={scheduleForm.studentId} onChange={e => setScheduleForm({...scheduleForm, studentId: e.target.value, manualName: ''})}>
                 <option value="">-- Selecionar --</option>
                 {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-gray-600 ml-1">Ou Nome Manual</label>
-              <input type="text" placeholder="Nome..." className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-white text-xs outline-none" value={scheduleForm.manualName} onChange={e => setScheduleForm({...scheduleForm, manualName: e.target.value, studentId: ''})} />
+              <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Ou Nome Manual</label>
+              <input type="text" placeholder="Nome..." className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-gray-900 text-xs outline-none focus:border-emerald-400 shadow-sm" value={scheduleForm.manualName} onChange={e => setScheduleForm({...scheduleForm, manualName: e.target.value, studentId: ''})} />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-gray-600 ml-1">Tipo</label>
-              <select className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-white text-xs" value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})}>
+              <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Tipo</label>
+              <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-gray-900 text-xs shadow-sm" value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})}>
                 <option value="pendente">Sessão Normal</option>
                 <option value="experimental">Experimental</option>
                 <option value="reposicao">Reposição</option>
@@ -1029,13 +1029,13 @@ export default function App() {
       {showStudentDetails && user.role === 'admin' && (
         <Modal title={showStudentDetails.name} onClose={() => setShowStudentDetailsId(null)} size="md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4">
-              <p className="text-[8px] font-black text-purple-400 uppercase mb-2">Créditos de Reposição</p>
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
+              <p className="text-[8px] font-black text-purple-600 uppercase mb-2">Créditos de Reposição</p>
               <div className="flex items-center justify-between">
-                <span className="text-3xl font-black text-white">{showStudentDetails.credits || 0}</span>
+                <span className="text-3xl font-black text-gray-900">{showStudentDetails.credits || 0}</span>
                 <div className="flex gap-2">
-                  <button onClick={() => adjustCredits(showStudentDetails.id, showStudentDetails.name, -1)} className="p-2 bg-rose-500/20 text-rose-500 rounded-lg"><MinusCircle size={16}/></button>
-                  <button onClick={() => adjustCredits(showStudentDetails.id, showStudentDetails.name, 1)}  className="p-2 bg-emerald-500/20 text-emerald-500 rounded-lg"><Plus size={16}/></button>
+                  <button onClick={() => adjustCredits(showStudentDetails.id, showStudentDetails.name, -1)} className="p-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200 transition-all"><MinusCircle size={16}/></button>
+                  <button onClick={() => adjustCredits(showStudentDetails.id, showStudentDetails.name, 1)}  className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-all"><Plus size={16}/></button>
                 </div>
               </div>
             </div>
@@ -1061,11 +1061,11 @@ export default function App() {
       {/* ===== MODAL PRONTUÁRIO SEPARADO — MELHORIA 9 ===== */}
       {showProntuarioStudent && user.role === 'admin' && (
         <Modal title={`Prontuário — ${showProntuarioStudent.name}`} onClose={() => setShowProntuarioId(null)} size="lg">
-          <div className="bg-[#0a0c10] rounded-2xl p-5 mb-6">
-            <p className="text-[9px] font-black uppercase text-emerald-500 mb-3">Nova Evolução Clínica</p>
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
+            <p className="text-[9px] font-black uppercase text-emerald-600 mb-3">Nova Evolução Clínica</p>
             <textarea
               placeholder="Descreva a evolução clínica..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-gray-300 outline-none h-28 resize-none"
+              className="w-full bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-900 outline-none h-28 resize-none focus:border-emerald-400 shadow-sm"
               value={newEvolution} onChange={e => setNewEvolution(e.target.value)}
             />
             <div className="flex justify-end mt-3">
@@ -1076,7 +1076,7 @@ export default function App() {
                 });
                 await createLog(`Adicionou evolução para ${showProntuarioStudent.name}`);
                 setNewEvolution('');
-              }} className="bg-emerald-500 text-black px-6 py-2 rounded-xl font-black text-[10px] uppercase">
+              }} className="bg-emerald-500 text-black px-6 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-emerald-400 transition-all">
                 Salvar Evolução
               </button>
             </div>
@@ -1085,17 +1085,17 @@ export default function App() {
             {evolutions.filter(e => e.studentId === showProntuarioStudent.id)
               .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
               .map(evo => (
-                <div key={evo.id} className="bg-[#11141a] p-5 rounded-2xl border border-white/5">
+                <div key={evo.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
                   <div className="flex justify-between mb-2 text-[9px] font-black uppercase">
-                    <span className="text-emerald-500/60">{new Date(evo.timestamp).toLocaleDateString()}</span>
-                    <span className="text-gray-600">{evo.author}</span>
+                    <span className="text-emerald-600">{new Date(evo.timestamp).toLocaleDateString()}</span>
+                    <span className="text-gray-400">{evo.author}</span>
                   </div>
-                  <p className="text-sm text-gray-400 italic">"{evo.content}"</p>
+                  <p className="text-sm text-gray-700 italic">"{evo.content}"</p>
                 </div>
               ))
             }
             {evolutions.filter(e => e.studentId === showProntuarioStudent.id).length === 0 && (
-              <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhuma evolução registrada</p>
+              <p className="text-center text-gray-400 text-[10px] font-black uppercase py-8">Nenhuma evolução registrada</p>
             )}
           </div>
         </Modal>
@@ -1173,26 +1173,26 @@ function AnexosModal({ student, onClose, db, appId, userName, createLog }) {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/95 z-[200] flex items-start justify-center p-4 backdrop-blur-xl overflow-y-auto">
-        <div className="bg-[#11141a] w-full max-w-2xl rounded-[2.5rem] p-6 lg:p-10 border border-white/10 shadow-2xl my-4">
+      <div className="fixed inset-0 bg-black/60 z-[200] flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
+        <div className="bg-[#f0ede8] w-full max-w-2xl rounded-[2.5rem] p-6 lg:p-10 border border-gray-200 shadow-2xl my-4">
           <div className="flex justify-between items-center mb-8">
             <div>
-              <h2 className="text-xl font-black italic uppercase">Anexos</h2>
+              <h2 className="text-xl font-black italic uppercase text-gray-900">Anexos</h2>
               <p className="text-[9px] text-gray-500 font-black uppercase mt-1">{student.name}</p>
             </div>
-            <button onClick={onClose} className="text-gray-500 hover:text-white p-2"><X size={24}/></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-900 p-2 transition-all"><X size={24}/></button>
           </div>
 
           {/* Área de upload */}
           <div
             onClick={() => inputRef.current?.click()}
-            className="border-2 border-dashed border-sky-500/30 bg-sky-500/5 rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-sky-500/60 hover:bg-sky-500/10 transition-all mb-6"
+            className="border-2 border-dashed border-sky-400 bg-sky-50 rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-sky-500 hover:bg-sky-100 transition-all mb-6"
           >
-            <Paperclip size={28} className="text-sky-400"/>
-            <p className="text-[11px] font-black uppercase text-sky-400">
+            <Paperclip size={28} className="text-sky-600"/>
+            <p className="text-[11px] font-black uppercase text-sky-700">
               {uploading ? 'Enviando...' : 'Clique para anexar arquivo'}
             </p>
-            <p className="text-[9px] text-gray-600 font-bold">Imagens, PDF, DOC • Máx. 2MB</p>
+            <p className="text-[9px] text-gray-500 font-bold">Imagens, PDF, DOC • Máx. 2MB</p>
             <input
               ref={inputRef}
               type="file"
@@ -1205,37 +1205,37 @@ function AnexosModal({ student, onClose, db, appId, userName, createLog }) {
 
           {/* Lista de anexos */}
           {anexos.length === 0 && !uploading && (
-            <p className="text-center text-gray-600 text-[10px] font-black uppercase py-8">Nenhum anexo ainda</p>
+            <p className="text-center text-gray-400 text-[10px] font-black uppercase py-8">Nenhum anexo ainda</p>
           )}
           <div className="space-y-3">
             {anexos.map(a => (
-              <div key={a.id} className="bg-[#0a0c10] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group">
+              <div key={a.id} className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-4 group shadow-sm">
                 {/* Thumbnail para imagens */}
                 {isImage(a.fileType) ? (
                   <img
                     src={a.data} alt={a.fileName}
-                    className="w-12 h-12 rounded-xl object-cover shrink-0 cursor-pointer border border-white/10"
+                    className="w-12 h-12 rounded-xl object-cover shrink-0 cursor-pointer border border-gray-200"
                     onClick={() => setPreview(a)}
                   />
                 ) : (
-                  <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center shrink-0 border border-white/10">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 border border-gray-200">
                     <FileText size={20} className="text-gray-500"/>
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-black text-white truncate">{a.fileName}</p>
-                  <p className="text-[8px] text-gray-600 font-bold uppercase">
+                  <p className="text-[11px] font-black text-gray-900 truncate">{a.fileName}</p>
+                  <p className="text-[8px] text-gray-400 font-bold uppercase">
                     {formatSize(a.fileSize)} • {new Date(a.timestamp).toLocaleDateString()} • {a.uploadedBy}
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <a href={a.data} download={a.fileName}
-                    className="p-2 bg-white/5 text-gray-500 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all"
+                    className="p-2 bg-gray-100 text-gray-500 rounded-xl hover:bg-sky-100 hover:text-sky-700 transition-all border border-gray-200"
                     title="Baixar">
                     <Download size={14}/>
                   </a>
                   <button onClick={() => handleDelete(a.id, a.fileName)}
-                    className="p-2 bg-white/5 text-gray-500 rounded-xl hover:bg-rose-500/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                    className="p-2 bg-gray-100 text-gray-500 rounded-xl hover:bg-rose-100 hover:text-rose-700 transition-all opacity-0 group-hover:opacity-100 border border-gray-200"
                     title="Remover">
                     <Trash2 size={14}/>
                   </button>
@@ -1248,11 +1248,11 @@ function AnexosModal({ student, onClose, db, appId, userName, createLog }) {
 
       {/* Preview de imagem */}
       {preview && (
-        <div className="fixed inset-0 bg-black/98 z-[300] flex items-center justify-center p-4" onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 bg-black/90 z-[300] flex items-center justify-center p-4" onClick={() => setPreview(null)}>
           <div className="relative max-w-3xl w-full">
-            <button onClick={() => setPreview(null)} className="absolute -top-10 right-0 text-gray-400 hover:text-white"><X size={24}/></button>
-            <img src={preview.data} alt={preview.fileName} className="w-full rounded-3xl border border-white/10 shadow-2xl"/>
-            <p className="text-center text-gray-500 text-[10px] font-black uppercase mt-3">{preview.fileName}</p>
+            <button onClick={() => setPreview(null)} className="absolute -top-10 right-0 text-gray-300 hover:text-white"><X size={24}/></button>
+            <img src={preview.data} alt={preview.fileName} className="w-full rounded-3xl shadow-2xl"/>
+            <p className="text-center text-gray-400 text-[10px] font-black uppercase mt-3">{preview.fileName}</p>
           </div>
         </div>
       )}
@@ -1263,11 +1263,11 @@ function AnexosModal({ student, onClose, db, appId, userName, createLog }) {
 function Modal({ title, children, onClose, size = 'md' }) {
   const widths = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
   return (
-    <div className="fixed inset-0 bg-black/95 z-[200] flex items-start justify-center p-4 backdrop-blur-xl overflow-y-auto">
-      <div className={`bg-[#11141a] w-full ${widths[size]} rounded-[2.5rem] p-6 lg:p-10 border border-white/10 shadow-2xl my-4`}>
+    <div className="fixed inset-0 bg-black/60 z-[200] flex items-start justify-center p-4 backdrop-blur-sm overflow-y-auto">
+      <div className={`bg-[#f0ede8] w-full ${widths[size]} rounded-[2.5rem] p-6 lg:p-10 border border-gray-200 shadow-2xl my-4`}>
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-xl lg:text-2xl font-black italic uppercase">{title}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-2"><X size={24}/></button>
+          <h2 className="text-xl lg:text-2xl font-black italic uppercase text-gray-900">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-900 p-2 transition-all"><X size={24}/></button>
         </div>
         {children}
       </div>
@@ -1292,10 +1292,10 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
   return (
     <div className="space-y-6">
       {/* Header da fisioterapeuta */}
-      <div className={`${c.bg} border ${c.border} rounded-3xl p-6 flex items-center gap-4`}>
+      <div className={`bg-white border ${c.border} rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
         <div className={`${c.badge} px-4 py-2 rounded-2xl font-black text-[10px] uppercase`}>{turno}</div>
         <div>
-          <h3 className="font-black text-white italic text-lg uppercase">{name}</h3>
+          <h3 className="font-black text-gray-900 italic text-lg uppercase">{name}</h3>
           <p className="text-[9px] text-gray-500 font-black uppercase">Fisioterapeuta — Turno da {turno}</p>
         </div>
       </div>
@@ -1373,8 +1373,8 @@ function StatMetric({ label, value, color, highlight }) {
 function InputGroup({ label, type = 'text', value, onChange, required = false }) {
   return (
     <div className="space-y-1">
-      <label className="text-[9px] font-black uppercase text-gray-600 ml-1">{label}</label>
-      <input type={type} className="w-full bg-[#1a1f26] border border-white/5 rounded-2xl p-4 text-sm text-white outline-none focus:border-emerald-500/30 transition-all" value={value || ''} onChange={e => onChange(e.target.value)} required={required} />
+      <label className="text-[9px] font-black uppercase text-gray-500 ml-1">{label}</label>
+      <input type={type} className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 outline-none focus:border-emerald-400 transition-all shadow-sm" value={value || ''} onChange={e => onChange(e.target.value)} required={required} />
     </div>
   );
 }
@@ -1382,8 +1382,8 @@ function InputGroup({ label, type = 'text', value, onChange, required = false })
 function DetailItem({ icon, label, value }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-emerald-500 mb-1 text-[9px] font-black uppercase">{icon}<p>{label}</p></div>
-      <p className="text-white text-[11px] leading-tight">{value || '---'}</p>
+      <div className="flex items-center gap-2 text-emerald-600 mb-1 text-[9px] font-black uppercase">{icon}<p>{label}</p></div>
+      <p className="text-gray-900 text-[11px] leading-tight font-bold">{value || '---'}</p>
     </div>
   );
 }
