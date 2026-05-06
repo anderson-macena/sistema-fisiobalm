@@ -67,13 +67,30 @@ const getTurnoProf = h => isManha(h) ? TURNO_MANHA_PROF : TURNO_TARDE_PROF;
 
 const getDaysUntilEnd = (endDate) => {
   if (!endDate) return null;
-  const now = new Date();
+  // Compara apenas as datas (sem horas) para evitar divergência de fuso horário
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const end = new Date(endDate);
-  const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+  end.setHours(0, 0, 0, 0);
+  const diff = Math.round((end - today) / (1000 * 60 * 60 * 24));
   return diff;
 };
 
-export default function App() {
+// Retorna a data (dd/mm) do dia da semana atual mais próximo
+const getDateForDay = (dayName) => {
+  const dayMap = { 'Segunda': 1, 'Terça': 2, 'Quarta': 3, 'Quinta': 4, 'Sexta': 5 };
+  const target = dayMap[dayName];
+  if (target === undefined) return '';
+  const today = new Date();
+  const todayDay = today.getDay(); // 0=dom, 1=seg...
+  // Ajusta para semana atual (segunda a sexta)
+  const mondayOffset = todayDay === 0 ? -6 : 1 - todayDay;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  const targetDate = new Date(monday);
+  targetDate.setDate(monday.getDate() + (target - 1));
+  return targetDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+};
   const [user, setUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [activeTab, setActiveTab] = useState('agenda');
@@ -100,8 +117,9 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newEvolution, setNewEvolution] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [alunosSubTab, setAlunosSubTab] = useState('todos'); // 'todos' | 'planoAoFim'
+  const [alunosSubTab, setAlunosSubTab] = useState('todos'); // 'todos' | 'planoAoFim' | 'expirados'
   const [dashSubTab, setDashSubTab] = useState('geral'); // 'geral' | 'andriele' | 'jessica'
+  const [dashDrillDown, setDashDrillDown] = useState(null); // { label, schedules[] }
 
   const [newStudent, setNewStudent] = useState({
     name: '', cpf: '', birthDate: '', email: '', address: '', plan: 'Mensal',
@@ -261,10 +279,15 @@ export default function App() {
     const [h, m] = hour.split(':').map(Number);
     const sd = new Date(); sd.setHours(h, m, 0, 0);
     const diffH = (sd - now) / (1000 * 60 * 60);
-    const newStatus = diffH >= 4 ? 'desmarcado' : 'desmarcado_atrasado';
+    const comAntecedencia = diffH >= 4;
+    const newStatus = comAntecedencia ? 'desmarcado' : 'desmarcado_atrasado';
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', scheduleId), { status: newStatus });
-    if (diffH >= 4) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', user.id), { credits: increment(1) });
-    await createLog(`${user.name} desmarcou aula das ${hour}.`);
+    if (comAntecedencia) {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', user.id), { credits: increment(1) });
+      await createLog(`${user.name} desmarcou aula das ${hour} com antecedência — 1 crédito de reposição gerado.`);
+    } else {
+      await createLog(`${user.name} desmarcou aula das ${hour} sem antecedência mínima — nenhum crédito gerado.`);
+    }
   };
 
   const handleReposicao = async (hour) => {
@@ -359,10 +382,16 @@ export default function App() {
   const showProntuarioStudent = useMemo(() => students.find(s => s.id === showProntuarioId), [students, showProntuarioId]);
   const showAnexosStudent = useMemo(() => students.find(s => s.id === showAnexosId), [students, showAnexosId]);
 
-  // Alunos com plano próximo ao fim (≤3 dias) OU já expirado
+  // Plano acaba em 0–3 dias (ainda ativo, mas próximo)
   const alunosPlanoAoFim = useMemo(() => students.filter(s => {
     const d = getDaysUntilEnd(s.endDate);
-    return d !== null && d <= 3;  // inclui negativos (expirados)
+    return d !== null && d >= 0 && d <= 3;
+  }), [students]);
+
+  // Plano já expirado (< 0 dias)
+  const alunosExpirados = useMemo(() => students.filter(s => {
+    const d = getDaysUntilEnd(s.endDate);
+    return d !== null && d < 0;
   }), [students]);
 
   const activeHours = activeTurno === 'manha' ? HOURS_MANHA : activeTurno === 'tarde' ? HOURS_TARDE : ALL_HOURS;
@@ -485,8 +514,11 @@ export default function App() {
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
               {DAYS.map(day => (
                 <button key={day} onClick={() => setSelectedDay(day)}
-                  className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${selectedDay === day ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}
-                >{day}</button>
+                  className={`px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap flex flex-col items-center gap-0.5 ${selectedDay === day ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}
+                >
+                  <span>{day}</span>
+                  <span className={`text-[9px] font-bold ${selectedDay === day ? 'text-black/70' : 'text-gray-400'}`}>{getDateForDay(day)}</span>
+                </button>
               ))}
             </div>
 
@@ -512,9 +544,12 @@ export default function App() {
                 <table className="w-full min-w-[700px] text-[10px]">
                   <thead>
                     <tr className="border-b border-white/5">
-                      <th className="p-3 text-left text-gray-500 font-black uppercase w-16">Hora</th>
+                      <th className="p-3 text-left text-gray-500 font-black uppercase w-16 text-[9px]">Hora</th>
                       {DAYS.map(d => (
-                        <th key={d} className="p-3 text-center text-gray-400 font-black uppercase">{d.substring(0, 3)}</th>
+                        <th key={d} className="p-3 text-center font-black uppercase">
+                          <span className="text-gray-400 text-[9px] block">{d.substring(0, 3)}</span>
+                          <span className="text-gray-500 text-[8px] font-bold block">{getDateForDay(d)}</span>
+                        </th>
                       ))}
                     </tr>
                   </thead>
@@ -750,7 +785,7 @@ export default function App() {
             </div>
 
             {/* Sub-abas */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex gap-2 mb-6 flex-wrap">
               <button onClick={() => setAlunosSubTab('todos')}
                 className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
                 Todos ({students.length})
@@ -759,12 +794,19 @@ export default function App() {
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'planoAoFim' ? 'bg-rose-500 text-white' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
                 <AlertTriangle size={12}/> Plano ao Fim ({alunosPlanoAoFim.length})
               </button>
+              <button onClick={() => setAlunosSubTab('expirados')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'expirados' ? 'bg-red-600 text-white' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                <AlertCircle size={12}/> Expirados ({alunosExpirados.length})
+              </button>
             </div>
 
             {/* Lista de alunos */}
             {(() => {
-              const lista = (alunosSubTab === 'planoAoFim' ? alunosPlanoAoFim : students)
-                .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+              const lista = (
+                alunosSubTab === 'planoAoFim' ? alunosPlanoAoFim :
+                alunosSubTab === 'expirados'  ? alunosExpirados :
+                students
+              ).filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {lista.map(s => {
@@ -883,21 +925,32 @@ export default function App() {
             </div>
 
             {/* Dashboard Geral */}
-            {dashSubTab === 'geral' && (
+            {dashSubTab === 'geral' && (() => {
+              const hoje = new Date().toISOString().split('T')[0];
+              const openDrill = (label, filter) => setDashDrillDown({ label, items: schedules.filter(filter) });
+              return (
               <div className="space-y-6">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard label="Agendados"    value={metrics.pendentes}  color="text-gray-400"   icon={<Clock size={22}/>} />
-                  <StatCard label="Presenças"    value={metrics.concluidas} color="text-emerald-500" icon={<CheckCircle2 size={22}/>} />
-                  <StatCard label="Faltas"       value={metrics.faltas}     color="text-rose-500"   icon={<AlertCircle size={22}/>} />
-                  <StatCard label="Desmarcações" value={metrics.desmarcados}color="text-orange-500" icon={<CalendarX size={22}/>} />
+                  <StatCard label="Agendados"    value={metrics.pendentes}  color="text-gray-600"   icon={<Clock size={22}/>}
+                    onClick={() => openDrill('Agendados', s => s.status === 'pendente')} />
+                  <StatCard label="Presenças"    value={metrics.concluidas} color="text-emerald-600" icon={<CheckCircle2 size={22}/>}
+                    onClick={() => openDrill('Presenças', s => s.status === 'concluida')} />
+                  <StatCard label="Faltas"       value={metrics.faltas}     color="text-rose-600"   icon={<AlertCircle size={22}/>}
+                    onClick={() => openDrill('Faltas', s => s.status === 'falta')} />
+                  <StatCard label="Desmarcações" value={metrics.desmarcados} color="text-orange-600" icon={<CalendarX size={22}/>}
+                    onClick={() => openDrill('Desmarcações', s => s.status === 'desmarcado' || s.status === 'desmarcado_atrasado')} />
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  <StatCard label="Reposições"   value={metrics.reposicao}    color="text-purple-400" icon={<RotateCcw size={22}/>} />
-                  <StatCard label="Experimentais"value={metrics.experimental} color="text-amber-400"  icon={<FlaskConical size={22}/>} />
-                  <StatCard label="Total Alunos" value={metrics.alunos}       color="text-blue-500"   icon={<Users size={22}/>} />
+                  <StatCard label="Reposições"   value={metrics.reposicao}    color="text-purple-600" icon={<RotateCcw size={22}/>}
+                    onClick={() => openDrill('Reposições', s => s.status === 'reposicao')} />
+                  <StatCard label="Experimentais" value={metrics.experimental} color="text-amber-600"  icon={<FlaskConical size={22}/>}
+                    onClick={() => openDrill('Experimentais', s => s.status === 'experimental')} />
+                  <StatCard label="Total Alunos" value={metrics.alunos}       color="text-blue-600"   icon={<Users size={22}/>}
+                    onClick={() => openDrill('Todos os Alunos', () => true)} />
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Dashboard Andriele — MELHORIA 4 */}
             {dashSubTab === 'andriele' && (
@@ -1105,6 +1158,33 @@ export default function App() {
       )}
 
       {/* ===== MODAL PRONTUÁRIO SEPARADO — MELHORIA 9 ===== */}
+      {/* ===== MODAL DRILL-DOWN DO DASHBOARD ===== */}
+      {dashDrillDown && (
+        <Modal title={dashDrillDown.label} onClose={() => setDashDrillDown(null)} size="md">
+          {dashDrillDown.items.length === 0 ? (
+            <p className="text-center text-gray-400 text-[10px] font-black uppercase py-12">Nenhum registro encontrado</p>
+          ) : (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {dashDrillDown.items.map(s => {
+                const theme = STATUS_THEME[s.status] || STATUS_THEME.pendente;
+                return (
+                  <div key={s.id} className="bg-white border border-gray-200 rounded-2xl px-5 py-3 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full ${theme.bg} shrink-0`}/>
+                      <div>
+                        <p className="text-sm font-black text-gray-900 uppercase">{s.name}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">{s.day} • {s.hour} • {theme.label}</p>
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${theme.bg} text-white`}>{theme.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+
       {showProntuarioStudent && user.role === 'admin' && (
         <Modal title={`Prontuário — ${showProntuarioStudent.name}`} onClose={() => setShowProntuarioId(null)} size="lg">
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
@@ -1397,12 +1477,16 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
   );
 }
 
-function StatCard({ label, value, color, icon }) {
+function StatCard({ label, value, color, icon, onClick }) {
   return (
-    <div className="bg-white p-6 lg:p-8 rounded-[2.5rem] border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+    <div
+      onClick={onClick}
+      className={`bg-white p-6 lg:p-8 rounded-[2.5rem] border border-gray-200 shadow-sm relative overflow-hidden group transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95' : ''}`}
+    >
       <div className="absolute top-4 right-4 text-gray-100 group-hover:text-gray-200 transition-all">{icon}</div>
       <p className="text-[9px] font-black uppercase text-gray-400 mb-3">{label}</p>
       <p className={`text-4xl lg:text-5xl font-black ${color} tracking-tighter`}>{value}</p>
+      {onClick && <p className="text-[8px] text-gray-300 font-black uppercase mt-2">Clique para ver detalhes</p>}
     </div>
   );
 }
