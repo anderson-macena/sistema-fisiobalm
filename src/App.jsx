@@ -148,10 +148,13 @@ export default function App() {
   }, [firebaseUser, user?.id]);
 
   // Notificação de plano próximo ao fim — gera log automático
+  // + Remove aulas fixas automaticamente quando o plano expira
   useEffect(() => {
     if (!firebaseUser || !user || user.role !== 'admin') return;
     students.forEach(async s => {
       const days = getDaysUntilEnd(s.endDate);
+
+      // Aviso de 3 dias
       if (days !== null && days <= 3 && days >= 0) {
         const logKey = `expiry_notif_${s.id}_${s.endDate}`;
         const alreadyLogged = logs.some(l => l.logKey === logKey);
@@ -164,8 +167,31 @@ export default function App() {
           } catch (e) { console.error(e); }
         }
       }
+
+      // Plano expirado (days < 0) — remove todas as aulas fixas pendentes do aluno
+      if (days !== null && days < 0) {
+        const removeKey = `expiry_removed_${s.id}_${s.endDate}`;
+        const alreadyRemoved = logs.some(l => l.logKey === removeKey);
+        if (!alreadyRemoved) {
+          try {
+            // Busca todas as aulas fixas pendentes desse aluno
+            const fixedPending = schedules.filter(
+              sc => sc.studentId === s.id && sc.isFixed === true && sc.status === 'pendente'
+            );
+            for (const sc of fixedPending) {
+              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', sc.id));
+            }
+            if (fixedPending.length > 0) {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                action: `🔴 Plano de ${s.name} expirou — ${fixedPending.length} aula(s) fixa(s) removida(s) da agenda.`,
+                user: 'Sistema', timestamp: new Date().toISOString(), logKey: removeKey, type: 'expiry_removed'
+              });
+            }
+          } catch (e) { console.error(e); }
+        }
+      }
     });
-  }, [students, firebaseUser]);
+  }, [students, schedules, firebaseUser]);
 
   const handleLogin = () => {
     setIsLoggingIn(true);
@@ -333,10 +359,10 @@ export default function App() {
   const showProntuarioStudent = useMemo(() => students.find(s => s.id === showProntuarioId), [students, showProntuarioId]);
   const showAnexosStudent = useMemo(() => students.find(s => s.id === showAnexosId), [students, showAnexosId]);
 
-  // Alunos com plano próximo ao fim (≤3 dias)
+  // Alunos com plano próximo ao fim (≤3 dias) OU já expirado
   const alunosPlanoAoFim = useMemo(() => students.filter(s => {
     const d = getDaysUntilEnd(s.endDate);
-    return d !== null && d <= 3 && d >= 0;
+    return d !== null && d <= 3;  // inclui negativos (expirados)
   }), [students]);
 
   const activeHours = activeTurno === 'manha' ? HOURS_MANHA : activeTurno === 'tarde' ? HOURS_TARDE : ALL_HOURS;
@@ -744,22 +770,39 @@ export default function App() {
                   {lista.map(s => {
                     const daysLeft = getDaysUntilEnd(s.endDate);
                     const isExpiring = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
+                    const isExpired  = daysLeft !== null && daysLeft < 0;
                     const fixedScheds = (s.fixedSchedules || []).map(fs => `${fs.day.substring(0,3)} ${fs.hour}`).join(' • ');
 
                     return (
-                      <div key={s.id} className={`bg-white p-5 rounded-[2rem] border transition-all group relative shadow-sm ${isExpiring ? 'border-rose-300 shadow-rose-100' : 'border-gray-200 hover:border-emerald-300 hover:shadow-md'}`}>
-                        {isExpiring && (
+                      <div key={s.id} className={`bg-white p-5 rounded-[2rem] border transition-all group relative shadow-sm ${
+                        isExpired  ? 'border-red-400 shadow-red-100 bg-red-50/30' :
+                        isExpiring ? 'border-rose-300 shadow-rose-100' :
+                                     'border-gray-200 hover:border-emerald-300 hover:shadow-md'
+                      }`}>
+                        {/* Banner de expirado */}
+                        {isExpired && (
+                          <div className="absolute top-0 left-0 right-0 bg-red-500 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
+                            <AlertCircle size={10} className="text-white"/>
+                            <span className="text-[9px] font-black text-white uppercase">Plano expirado — renovação necessária</span>
+                          </div>
+                        )}
+                        {/* Banner de expirando em breve */}
+                        {!isExpired && isExpiring && (
                           <div className="absolute top-0 left-0 right-0 bg-rose-100 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
                             <AlertTriangle size={10} className="text-rose-500"/>
                             <span className="text-[9px] font-black text-rose-600 uppercase">Plano acaba em {daysLeft === 0 ? 'hoje' : `${daysLeft}d`}</span>
                           </div>
                         )}
-                        <div className={`${isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
+                        <div className={`${isExpired || isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
                           <div className="flex items-start gap-3 mb-3 cursor-pointer">
-                            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-black font-black text-lg shrink-0">{s.name.charAt(0)}</div>
+                            {/* Avatar vermelho se expirado */}
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg shrink-0 ${isExpired ? 'bg-red-500 text-white' : 'bg-emerald-500 text-black'}`}>
+                              {s.name.charAt(0)}
+                            </div>
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-black uppercase text-sm text-gray-900 leading-tight break-words">{s.name}</h3>
-                              <p className="text-[9px] text-emerald-600 font-bold uppercase mt-0.5">{s.plan} • {s.frequencyLabel}</p>
+                              {/* Nome vermelho se expirado */}
+                              <h3 className={`font-black uppercase text-sm leading-tight break-words ${isExpired ? 'text-red-600' : 'text-gray-900'}`}>{s.name}</h3>
+                              <p className={`text-[9px] font-bold uppercase mt-0.5 ${isExpired ? 'text-red-400' : 'text-emerald-600'}`}>{s.plan} • {s.frequencyLabel}</p>
                             </div>
                           </div>
 
@@ -777,7 +820,10 @@ export default function App() {
                             </div>
                             <div className="flex justify-between text-[8px] font-black uppercase">
                               <span className="text-gray-400">Fim</span>
-                              <span className={isExpiring ? 'text-rose-600' : 'text-emerald-600'}>{s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}</span>
+                              <span className={isExpired ? 'text-red-600 font-black' : isExpiring ? 'text-rose-600' : 'text-emerald-600'}>
+                                {s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}
+                                {isExpired && ' ✕'}
+                              </span>
                             </div>
                           </div>
                         </div>
