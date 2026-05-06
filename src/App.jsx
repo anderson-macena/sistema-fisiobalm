@@ -392,12 +392,12 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-[#07090c] text-white pb-24 lg:pb-8 lg:pl-64">
+    <div className="min-h-screen bg-[#f0ede8] text-gray-900 pb-24 lg:pb-8 lg:pl-64">
 
       {/* NAVEGAÇÃO LATERAL/INFERIOR */}
-      <nav className="fixed bottom-0 left-0 right-0 lg:top-0 lg:w-64 lg:h-full bg-[#11141a] border-t lg:border-r border-white/5 z-50 flex lg:flex-col gap-1 p-2 lg:p-4">
+      <nav className="fixed bottom-0 left-0 right-0 lg:top-0 lg:w-64 lg:h-full bg-white border-t lg:border-r border-gray-200 shadow-sm z-50 flex lg:flex-col gap-1 p-2 lg:p-4">
         <div className="hidden lg:block px-4 py-6 mb-4">
-          <h2 className="text-2xl font-black italic text-emerald-500 tracking-tighter">FISIOBALM</h2>
+          <h2 className="text-2xl font-black italic text-emerald-600 tracking-tighter">FISIOBALM</h2>
         </div>
         <div className="flex lg:flex-col gap-1 w-full overflow-x-auto lg:overflow-visible">
           <NavItem active={activeTab === 'agenda'}    icon={<Calendar size={18}/>}  label="Agenda"    onClick={() => setActiveTab('agenda')} />
@@ -407,10 +407,10 @@ export default function App() {
             <NavItem active={activeTab === 'historico'} icon={<History size={18}/>}  label="Logs"      onClick={() => setActiveTab('historico')} />
           </>}
         </div>
-        {/* BOTÃO SAIR — visível no mobile e desktop */}
+        {/* BOTÃO SAIR */}
         <button
           onClick={() => { setUser(null); setLoginCpf(''); setLoginError(''); }}
-          className="flex-shrink-0 flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 text-rose-500/70 hover:text-rose-500 hover:bg-rose-500/5 rounded-2xl transition-all lg:mt-auto ml-auto lg:ml-0"
+          className="flex-shrink-0 flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all lg:mt-auto ml-auto lg:ml-0"
         >
           <LogOut size={18}/>
           <span className="text-[8px] lg:text-[10px] font-black uppercase whitespace-nowrap">Sair</span>
@@ -421,31 +421,31 @@ export default function App() {
 
         {/* HEADER DO USUÁRIO */}
         <header className="mb-8">
-          <div className="bg-[#11141a] border border-white/5 rounded-[2rem] p-4 lg:p-8 flex flex-col gap-4">
+          <div className="bg-white border border-gray-200 shadow-sm rounded-[2rem] p-4 lg:p-8 flex flex-col gap-4">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 lg:w-16 lg:h-16 bg-emerald-500 rounded-2xl lg:rounded-3xl flex items-center justify-center text-black font-black text-xl lg:text-2xl">{user.name.charAt(0)}</div>
                 <div>
-                  <h2 className="text-lg lg:text-2xl font-black uppercase italic tracking-tighter">{user.name}</h2>
-                  <span className="bg-emerald-500/10 text-emerald-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">{user.role === 'admin' ? 'Administrador' : 'Aluno Ativo'}</span>
+                  <h2 className="text-lg lg:text-2xl font-black uppercase italic tracking-tighter text-gray-900">{user.name}</h2>
+                  <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">{user.role === 'admin' ? 'Administrador' : 'Aluno Ativo'}</span>
                 </div>
               </div>
               {user.role !== 'admin' && userStats && (
                 <div className="flex flex-wrap gap-3 justify-center">
-                  <StatMetric label="Presenças"    value={userStats.presencas}    color="text-emerald-500" />
-                  <StatMetric label="Faltas"       value={userStats.faltas}       color="text-rose-500" />
-                  <StatMetric label="Desmarcações" value={userStats.desmarcacoes} color="text-orange-500" />
-                  <StatMetric label="Créditos"     value={userStats.creditos}     color="text-purple-400" highlight />
+                  <StatMetric label="Presenças"    value={userStats.presencas}    color="text-emerald-600" />
+                  <StatMetric label="Faltas"       value={userStats.faltas}       color="text-rose-600" />
+                  <StatMetric label="Desmarcações" value={userStats.desmarcacoes} color="text-orange-600" />
+                  <StatMetric label="Créditos"     value={userStats.creditos}     color="text-purple-600" highlight />
                 </div>
               )}
             </div>
             {user.role !== 'admin' && userStats && (
-              <div className="flex flex-wrap gap-4 pt-3 border-t border-white/5">
+              <div className="flex flex-wrap gap-4 pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
-                  <CalendarDays size={14} className="text-gray-500"/> Início: <span className="text-white ml-1">{userStats.startDate ? new Date(userStats.startDate).toLocaleDateString() : '---'}</span>
+                  <CalendarDays size={14}/> Início: <span className="text-gray-900 ml-1">{userStats.startDate ? new Date(userStats.startDate).toLocaleDateString() : '---'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
-                  <Clock size={14} className="text-gray-500"/> Fim: <span className="text-emerald-500 ml-1">{userStats.endDate ? new Date(userStats.endDate).toLocaleDateString() : '---'}</span>
+                  <Clock size={14}/> Fim: <span className="text-emerald-600 ml-1">{userStats.endDate ? new Date(userStats.endDate).toLocaleDateString() : '---'}</span>
                 </div>
               </div>
             )}
@@ -459,22 +459,25 @@ export default function App() {
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
               {DAYS.map(day => (
                 <button key={day} onClick={() => setSelectedDay(day)}
-                  className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${selectedDay === day ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
+                  className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all whitespace-nowrap ${selectedDay === day ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}
                 >{day}</button>
               ))}
             </div>
 
-            {/* Seletor de turno — MELHORIA 1 */}
+            {/* Seletor de turno */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setActiveTurno('manha')}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'manha' ? 'bg-amber-500 text-black' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'manha' ? 'bg-amber-500 text-black' : 'bg-black/10 text-gray-500 border border-black/10'}`}
               ><Sun size={14}/> Manhã <span className="opacity-60">07–12h</span></button>
               <button onClick={() => setActiveTurno('tarde')}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'tarde' ? 'bg-blue-500 text-black' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'tarde' ? 'bg-blue-500 text-white' : 'bg-black/10 text-gray-500 border border-black/10'}`}
               ><Moon size={14}/> Tarde <span className="opacity-60">15–20h</span></button>
-              <button onClick={() => setActiveTurno('semana')}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'semana' ? 'bg-emerald-500 text-black' : 'bg-[#11141a] text-gray-400 border border-white/5'}`}
-              ><Calendar size={14}/> Semana</button>
+              {/* Visão semanal apenas para admin */}
+              {user.role === 'admin' && (
+                <button onClick={() => setActiveTurno('semana')}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-wider transition-all ${activeTurno === 'semana' ? 'bg-emerald-500 text-black' : 'bg-black/10 text-gray-500 border border-black/10'}`}
+                ><Calendar size={14}/> Semana</button>
+              )}
             </div>
 
             {/* ===== MELHORIA 5: VISÃO SEMANAL ===== */}
@@ -579,7 +582,7 @@ export default function App() {
             {activeTurno !== 'semana' && (
               <div className="space-y-3">
                 {/* Badge do turno */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit ${activeTurno === 'manha' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                   {activeTurno === 'manha' ? <Sun size={12}/> : <Moon size={12}/>}
                   {activeTurno === 'manha' ? `Manhã — Fisioterapeuta: ${TURNO_MANHA_PROF}` : `Tarde — Fisioterapeuta: ${TURNO_TARDE_PROF}`}
                 </div>
@@ -596,9 +599,9 @@ export default function App() {
 
                   return (
                     <div key={hour} className="flex gap-3 items-start">
-                      <div className={`w-16 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 ${activeTurno === 'manha' ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-blue-500/10 border border-blue-500/20'}`}>
-                        <span className={`font-black text-sm ${activeTurno === 'manha' ? 'text-amber-400' : 'text-blue-400'}`}>{hour}</span>
-                        <span className="text-[8px] font-bold text-gray-600">{totalOcupado}/3</span>
+                      <div className={`w-16 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 ${activeTurno === 'manha' ? 'bg-amber-100 border border-amber-200' : 'bg-blue-100 border border-blue-200'}`}>
+                        <span className={`font-black text-sm ${activeTurno === 'manha' ? 'text-amber-700' : 'text-blue-700'}`}>{hour}</span>
+                        <span className="text-[8px] font-bold text-gray-400">{totalOcupado}/3</span>
                       </div>
 
                       <div className="flex-1 flex flex-wrap gap-2 items-start">
@@ -628,12 +631,14 @@ export default function App() {
                           );
                         })}
 
-                        {/* Vagas bloqueadas individualmente — cada uma é um card independente */}
+                        {/* Vagas bloqueadas — admin vê "Vaga bloqueada", aluno vê "Sem vagas" */}
                         {blockedSlots.map(bs => (
-                          <div key={bs.id} className="bg-slate-700/50 border border-slate-600 px-4 py-3 rounded-2xl min-w-[110px] flex flex-col gap-1">
+                          <div key={bs.id} className="bg-slate-200 border border-slate-300 px-4 py-3 rounded-2xl min-w-[110px] flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                              <Lock size={12} className="text-slate-400 shrink-0"/>
-                              <span className="text-[10px] font-black text-slate-300 uppercase">Vaga bloqueada</span>
+                              {user.role === 'admin'
+                                ? <><Lock size={12} className="text-slate-500 shrink-0"/><span className="text-[10px] font-black text-slate-700 uppercase">Vaga bloqueada</span></>
+                                : <><X size={12} className="text-slate-500 shrink-0"/><span className="text-[10px] font-black text-slate-600 uppercase">Sem vagas</span></>
+                              }
                             </div>
                             {user.role === 'admin' && (
                               <button
@@ -641,7 +646,7 @@ export default function App() {
                                   await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'schedules', bs.id));
                                   await createLog(`Desbloqueou 1 vaga em ${selectedDay} ${hour}`);
                                 }}
-                                className="flex items-center gap-1 mt-1 text-slate-500 hover:text-emerald-400 transition-all text-[8px] font-black uppercase"
+                                className="flex items-center gap-1 mt-1 text-slate-500 hover:text-emerald-600 transition-all text-[8px] font-black uppercase"
                               >
                                 <Unlock size={10}/> Desbloquear
                               </button>
@@ -652,13 +657,11 @@ export default function App() {
                         {/* Botões de ação admin — só aparecem se ainda há vagas livres */}
                         {user.role === 'admin' && vagasLivres > 0 && (
                           <div className="flex gap-2 flex-wrap">
-                            {/* Agendar */}
                             <button onClick={() => setShowScheduleModal({ hour })}
-                              className="w-14 h-14 rounded-2xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 hover:text-emerald-500 hover:border-emerald-500/30 transition-all gap-0.5">
+                              className="w-14 h-14 rounded-2xl border border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-gray-400 hover:text-emerald-600 hover:border-emerald-400 transition-all gap-0.5 shadow-sm">
                               <Plus size={16}/>
                               <span className="text-[7px] font-black uppercase">Agendar</span>
                             </button>
-                            {/* Bloquear 1 vaga — só ocupa 1 das vagas restantes */}
                             <button
                               onClick={async () => {
                                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'schedules'), {
@@ -669,11 +672,10 @@ export default function App() {
                                 await createLog(`Bloqueou 1 vaga em ${selectedDay} ${hour} (${blockedSlots.length + 1}ª bloqueada)`);
                               }}
                               title={`Bloquear 1 vaga (${vagasLivres} livre${vagasLivres > 1 ? 's' : ''})`}
-                              className="w-14 h-14 rounded-2xl border border-dashed border-slate-600 flex flex-col items-center justify-center text-slate-600 hover:text-slate-300 hover:border-slate-400 hover:bg-slate-700/20 transition-all gap-0.5">
+                              className="w-14 h-14 rounded-2xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400 hover:text-slate-700 hover:border-slate-500 hover:bg-slate-50 transition-all gap-0.5 shadow-sm">
                               <Lock size={13}/>
                               <span className="text-[7px] font-black uppercase">+1 vaga</span>
                             </button>
-                            {/* Bloquear TUDO que resta — ocupa todas as vagas livres de uma vez */}
                             {vagasLivres > 1 && (
                               <button
                                 onClick={async () => {
@@ -687,7 +689,7 @@ export default function App() {
                                   await createLog(`Bloqueou todas as ${vagasLivres} vagas restantes em ${selectedDay} ${hour}`);
                                 }}
                                 title={`Bloquear as ${vagasLivres} vagas restantes`}
-                                className="w-14 h-14 rounded-2xl border border-dashed border-rose-800 flex flex-col items-center justify-center text-rose-800 hover:text-rose-400 hover:border-rose-600 hover:bg-rose-900/10 transition-all gap-0.5">
+                                className="w-14 h-14 rounded-2xl border border-dashed border-rose-300 bg-white flex flex-col items-center justify-center text-rose-400 hover:text-rose-600 hover:border-rose-500 hover:bg-rose-50 transition-all gap-0.5 shadow-sm">
                                 <Lock size={13}/>
                                 <span className="text-[7px] font-black uppercase">Tudo</span>
                               </button>
@@ -714,21 +716,21 @@ export default function App() {
         {activeTab === 'alunos' && user.role === 'admin' && (
           <div>
             <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-              <h1 className="text-2xl lg:text-3xl font-black uppercase italic">Alunos</h1>
+              <h1 className="text-2xl lg:text-3xl font-black uppercase italic text-gray-900">Alunos</h1>
               <div className="flex gap-3 flex-wrap">
-                <input type="text" placeholder="Buscar..." className="bg-[#11141a] border border-white/5 rounded-2xl px-5 py-3 text-xs w-48 outline-none text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                <button onClick={() => setShowAddStudent(true)} className="bg-emerald-500 text-black px-5 py-3 rounded-2xl font-black text-[10px] uppercase flex items-center gap-2"><UserPlus size={16}/> Matricular</button>
+                <input type="text" placeholder="Buscar..." className="bg-white border border-gray-200 rounded-2xl px-5 py-3 text-xs w-48 outline-none text-gray-900 shadow-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <button onClick={() => setShowAddStudent(true)} className="bg-emerald-500 text-black px-5 py-3 rounded-2xl font-black text-[10px] uppercase flex items-center gap-2 shadow-sm"><UserPlus size={16}/> Matricular</button>
               </div>
             </div>
 
-            {/* Sub-abas — MELHORIA 8 */}
+            {/* Sub-abas */}
             <div className="flex gap-2 mb-6">
               <button onClick={() => setAlunosSubTab('todos')}
-                className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-white text-black' : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
+                className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'todos' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
                 Todos ({students.length})
               </button>
               <button onClick={() => setAlunosSubTab('planoAoFim')}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'planoAoFim' ? 'bg-rose-500 text-white' : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab === 'planoAoFim' ? 'bg-rose-500 text-white' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
                 <AlertTriangle size={12}/> Plano ao Fim ({alunosPlanoAoFim.length})
               </button>
             </div>
@@ -742,66 +744,61 @@ export default function App() {
                   {lista.map(s => {
                     const daysLeft = getDaysUntilEnd(s.endDate);
                     const isExpiring = daysLeft !== null && daysLeft <= 3 && daysLeft >= 0;
-                    // MELHORIA 10: horários fixos
                     const fixedScheds = (s.fixedSchedules || []).map(fs => `${fs.day.substring(0,3)} ${fs.hour}`).join(' • ');
 
                     return (
-                      <div key={s.id} className={`bg-[#11141a] p-5 rounded-[2rem] border transition-all group relative ${isExpiring ? 'border-rose-500/40 shadow-lg shadow-rose-500/10' : 'border-white/5 hover:border-emerald-500/30'}`}>
+                      <div key={s.id} className={`bg-white p-5 rounded-[2rem] border transition-all group relative shadow-sm ${isExpiring ? 'border-rose-300 shadow-rose-100' : 'border-gray-200 hover:border-emerald-300 hover:shadow-md'}`}>
                         {isExpiring && (
-                          <div className="absolute top-0 left-0 right-0 bg-rose-500/20 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
-                            <AlertTriangle size={10} className="text-rose-400"/>
-                            <span className="text-[9px] font-black text-rose-400 uppercase">Plano acaba em {daysLeft === 0 ? 'hoje' : `${daysLeft}d`}</span>
+                          <div className="absolute top-0 left-0 right-0 bg-rose-100 rounded-t-[2rem] px-4 py-1.5 flex items-center gap-2">
+                            <AlertTriangle size={10} className="text-rose-500"/>
+                            <span className="text-[9px] font-black text-rose-600 uppercase">Plano acaba em {daysLeft === 0 ? 'hoje' : `${daysLeft}d`}</span>
                           </div>
                         )}
                         <div className={`${isExpiring ? 'mt-6' : ''}`} onClick={() => setShowStudentDetailsId(s.id)}>
                           <div className="flex items-start gap-3 mb-3 cursor-pointer">
                             <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center text-black font-black text-lg shrink-0">{s.name.charAt(0)}</div>
                             <div className="flex-1 min-w-0">
-                              {/* Nome completo visível — sem truncar, quebra linha se necessário */}
-                              <h3 className="font-black uppercase text-sm text-white leading-tight break-words">{s.name}</h3>
-                              <p className="text-[9px] text-emerald-500/70 font-bold uppercase mt-0.5">{s.plan} • {s.frequencyLabel}</p>
+                              <h3 className="font-black uppercase text-sm text-gray-900 leading-tight break-words">{s.name}</h3>
+                              <p className="text-[9px] text-emerald-600 font-bold uppercase mt-0.5">{s.plan} • {s.frequencyLabel}</p>
                             </div>
                           </div>
 
-                          {/* MELHORIA 10: horários fixos visíveis no card */}
                           {fixedScheds && (
-                            <div className="bg-white/5 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
-                              <Clock size={10} className="text-emerald-500 shrink-0"/>
-                              <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider truncate">{fixedScheds}</span>
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
+                              <Clock size={10} className="text-emerald-600 shrink-0"/>
+                              <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider truncate">{fixedScheds}</span>
                             </div>
                           )}
 
-                          <div className="space-y-1 pt-2 border-t border-white/5">
+                          <div className="space-y-1 pt-2 border-t border-gray-100">
                             <div className="flex justify-between text-[8px] font-black uppercase">
-                              <span className="text-gray-600">Início</span>
-                              <span className="text-white">{s.startDate ? new Date(s.startDate).toLocaleDateString() : '---'}</span>
+                              <span className="text-gray-400">Início</span>
+                              <span className="text-gray-700">{s.startDate ? new Date(s.startDate).toLocaleDateString() : '---'}</span>
                             </div>
                             <div className="flex justify-between text-[8px] font-black uppercase">
-                              <span className="text-gray-600">Fim</span>
-                              <span className={isExpiring ? 'text-rose-400' : 'text-emerald-500'}>{s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}</span>
+                              <span className="text-gray-400">Fim</span>
+                              <span className={isExpiring ? 'text-rose-600' : 'text-emerald-600'}>{s.endDate ? new Date(s.endDate).toLocaleDateString() : '---'}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Botões de ação — linha 1: Prontuário + Anexos */}
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
                           <button onClick={() => setShowProntuarioId(s.id)} title="Prontuário"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-purple-500/20 hover:text-purple-400 transition-all text-[9px] font-black uppercase">
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-purple-100 hover:text-purple-700 transition-all text-[9px] font-black uppercase border border-gray-200">
                             <BookOpen size={12}/> Prontuário
                           </button>
                           <button onClick={e => { e.stopPropagation(); setShowAnexosId(s.id); }} title="Anexos"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-sky-500/20 hover:text-sky-400 transition-all text-[9px] font-black uppercase">
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-sky-100 hover:text-sky-700 transition-all text-[9px] font-black uppercase border border-gray-200">
                             <Paperclip size={12}/> Anexos
                           </button>
                         </div>
-                        {/* Linha 2: Editar + Excluir */}
                         <div className="flex gap-2 mt-2">
                           <button onClick={e => { e.stopPropagation(); setEditStudentData(JSON.parse(JSON.stringify(s))); }} title="Editar"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-emerald-500 hover:text-black transition-all text-[9px] font-black uppercase">
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-emerald-100 hover:text-emerald-700 transition-all text-[9px] font-black uppercase border border-gray-200">
                             <Edit3 size={12}/> Editar
                           </button>
                           <button onClick={e => handleDeleteStudent(e, s.id, s.name)} title="Excluir"
-                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-white/5 text-gray-400 rounded-xl hover:bg-rose-500 hover:text-white transition-all text-[9px] font-black uppercase">
+                            className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-50 text-gray-500 rounded-xl hover:bg-rose-100 hover:text-rose-700 transition-all text-[9px] font-black uppercase border border-gray-200">
                             <Trash2 size={12}/> Excluir
                           </button>
                         </div>
@@ -823,17 +820,17 @@ export default function App() {
         {/* ===== ABA DASHBOARD ===== */}
         {activeTab === 'dashboard' && user.role === 'admin' && (
           <div>
-            <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6">Dashboard</h1>
+            <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6 text-gray-900">Dashboard</h1>
 
-            {/* Sub-abas — MELHORIA 4 */}
+            {/* Sub-abas */}
             <div className="flex gap-2 mb-8 overflow-x-auto pb-1 no-scrollbar">
               {[
-                { key: 'geral',    label: 'Geral',    color: 'bg-white text-black' },
+                { key: 'geral',    label: 'Geral',    color: 'bg-gray-900 text-white' },
                 { key: 'andriele', label: 'Andriele · Manhã', color: 'bg-amber-500 text-black' },
-                { key: 'jessica',  label: 'Jessica · Tarde',  color: 'bg-blue-500 text-black' },
+                { key: 'jessica',  label: 'Jessica · Tarde',  color: 'bg-blue-500 text-white' },
               ].map(t => (
                 <button key={t.key} onClick={() => setDashSubTab(t.key)}
-                  className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase whitespace-nowrap transition-all ${dashSubTab === t.key ? t.color : 'bg-[#11141a] text-gray-500 border border-white/5'}`}>
+                  className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase whitespace-nowrap transition-all ${dashSubTab === t.key ? t.color : 'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
                   {t.label}
                 </button>
               ))}
@@ -881,19 +878,19 @@ export default function App() {
         {/* ===== ABA HISTÓRICO — MELHORIA 7 ===== */}
         {activeTab === 'historico' && user.role === 'admin' && (
           <div className="max-w-4xl mx-auto space-y-2">
-            <h1 className="text-2xl font-black uppercase italic mb-6">Logs do Sistema</h1>
+            <h1 className="text-2xl font-black uppercase italic mb-6 text-gray-900">Logs do Sistema</h1>
             {logs.map(log => {
               const isExpiry = log.type === 'expiry_warning';
               return (
-                <div key={log.id} className={`p-4 rounded-2xl border flex justify-between items-center gap-4 ${isExpiry ? 'bg-rose-500/10 border-rose-500/20' : 'bg-[#11141a] border-white/5'}`}>
+                <div key={log.id} className={`p-4 rounded-2xl border flex justify-between items-center gap-4 shadow-sm ${isExpiry ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-200'}`}>
                   <div className="flex items-center gap-3 min-w-0">
-                    {isExpiry && <AlertTriangle size={14} className="text-rose-400 shrink-0"/>}
+                    {isExpiry && <AlertTriangle size={14} className="text-rose-500 shrink-0"/>}
                     <div className="min-w-0">
-                      <p className={`text-[10px] font-black uppercase truncate ${isExpiry ? 'text-rose-300' : 'text-white'}`}>{log.action}</p>
-                      <p className="text-[8px] font-bold text-gray-600">Por: {log.user}</p>
+                      <p className={`text-[10px] font-black uppercase truncate ${isExpiry ? 'text-rose-700' : 'text-gray-900'}`}>{log.action}</p>
+                      <p className="text-[8px] font-bold text-gray-400">Por: {log.user}</p>
                     </div>
                   </div>
-                  <span className="text-[9px] font-bold text-gray-700 shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
+                  <span className="text-[9px] font-bold text-gray-400 shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
                 </div>
               );
             })}
@@ -1280,7 +1277,7 @@ function Modal({ title, children, onClose, size = 'md' }) {
 
 function NavItem({ active, icon, label, onClick }) {
   return (
-    <button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all whitespace-nowrap ${active ? 'bg-emerald-500 text-black' : 'text-gray-500 hover:text-white'}`}>
+    <button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all whitespace-nowrap ${active ? 'bg-emerald-500 text-black font-black shadow-sm' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
       {icon} <span className="text-[8px] lg:text-[10px] uppercase font-black">{label}</span>
     </button>
   );
@@ -1305,29 +1302,29 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
 
       {/* Atendimentos do dia e mensal */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Atend. Hoje</p>
+        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Atend. Hoje</p>
           <p className={`text-5xl font-black ${c.text} tracking-tighter`}>{data.daily}</p>
         </div>
-        <div className="bg-[#11141a] p-6 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Atend. Mensal</p>
+        <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Atend. Mensal</p>
           <p className={`text-5xl font-black ${c.text} tracking-tighter`}>{data.monthly}</p>
         </div>
       </div>
 
       {/* Totais detalhados */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Presenças</p>
-          <p className="text-4xl font-black text-emerald-500 tracking-tighter">{data.totalConcluidas}</p>
+        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Presenças</p>
+          <p className="text-4xl font-black text-emerald-600 tracking-tighter">{data.totalConcluidas}</p>
         </div>
-        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Faltas</p>
-          <p className="text-4xl font-black text-rose-500 tracking-tighter">{data.totalFaltas}</p>
+        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Faltas</p>
+          <p className="text-4xl font-black text-rose-600 tracking-tighter">{data.totalFaltas}</p>
         </div>
-        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Desmarcações</p>
-          <p className="text-4xl font-black text-orange-500 tracking-tighter">{data.totalDesmarcados}</p>
+        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Desmarcações</p>
+          <p className="text-4xl font-black text-orange-600 tracking-tighter">{data.totalDesmarcados}</p>
         </div>
         {/* Reposição — ITEM 3/6 */}
         <div className="bg-purple-500/10 p-5 rounded-3xl border border-purple-500/20">
@@ -1345,8 +1342,8 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
           </div>
           <p className="text-4xl font-black text-amber-400 tracking-tighter">{data.totalExperimental}</p>
         </div>
-        <div className="bg-[#11141a] p-5 rounded-3xl border border-white/5">
-          <p className="text-[9px] font-black uppercase text-gray-600 mb-2">Total Sessões</p>
+        <div className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Total Sessões</p>
           <p className={`text-4xl font-black ${c.text} tracking-tighter`}>{data.total}</p>
         </div>
       </div>
@@ -1356,9 +1353,9 @@ function ProfDashboard({ name, turno, turnoColor, data }) {
 
 function StatCard({ label, value, color, icon }) {
   return (
-    <div className="bg-[#11141a] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 relative overflow-hidden group">
-      <div className="absolute top-4 right-4 text-white/5 group-hover:text-white/10 transition-all">{icon}</div>
-      <p className="text-[9px] font-black uppercase text-gray-600 mb-3">{label}</p>
+    <div className="bg-white p-6 lg:p-8 rounded-[2.5rem] border border-gray-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+      <div className="absolute top-4 right-4 text-gray-100 group-hover:text-gray-200 transition-all">{icon}</div>
+      <p className="text-[9px] font-black uppercase text-gray-400 mb-3">{label}</p>
       <p className={`text-4xl lg:text-5xl font-black ${color} tracking-tighter`}>{value}</p>
     </div>
   );
@@ -1366,8 +1363,8 @@ function StatCard({ label, value, color, icon }) {
 
 function StatMetric({ label, value, color, highlight }) {
   return (
-    <div className={`text-center px-3 py-2 rounded-2xl ${highlight ? 'bg-white/5' : ''}`}>
-      <p className="text-[8px] font-black text-gray-600 uppercase mb-1">{label}</p>
+    <div className={`text-center px-3 py-2 rounded-2xl ${highlight ? 'bg-gray-100' : ''}`}>
+      <p className="text-[8px] font-black text-gray-400 uppercase mb-1">{label}</p>
       <p className={`text-base font-black ${color}`}>{value}</p>
     </div>
   );
