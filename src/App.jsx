@@ -11,16 +11,26 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 
 // ─── FIREBASE ────────────────────────────────────────────────────────────────
+// As credenciais são lidas de variáveis de ambiente (.env) — nunca hardcoded.
+// Em produção no canvas/Claude, __firebase_config é injetado automaticamente.
 const FB_CONFIG = typeof __firebase_config !== 'undefined'
   ? JSON.parse(__firebase_config)
-  : { apiKey:"AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM", authDomain:"fisiobalm-26532.firebaseapp.com",
-      projectId:"fisiobalm-26532", storageBucket:"fisiobalm-26532.firebasestorage.app",
-      messagingSenderId:"498080566980", appId:"1:498080566980:web:07c3ca7fe7869b4aab8391" };
+  : {
+      apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+    };
 
 const fbApp = getApps().length ? getApp() : initializeApp(FB_CONFIG);
 const auth  = getAuth(fbApp);
 const db    = getFirestore(fbApp);
-const APP_ID = (() => { try { return typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-v1'; } catch { return 'fisiobalm-v1'; } })();
+const APP_ID = (() => {
+  try { return typeof __app_id !== 'undefined' ? __app_id : import.meta.env.VITE_APP_ID || 'fisiobalm-v1'; }
+  catch { return import.meta.env.VITE_APP_ID || 'fisiobalm-v1'; }
+})();
 
 // ─── Caminhos Firestore centralizados num único lugar ────────────────────────
 // Todos os dados ficam em: fisiobalm/{APP_ID}/
@@ -45,16 +55,19 @@ const HOURS_T     = ['15:00','16:00','17:00','18:00','19:00','20:00'];
 const ALL_HOURS   = [...HOURS_M, ...HOURS_T];
 const PLANOS      = ['Mensal','Trimestral','Semestral'];
 const FREQS       = [{label:'1x por semana',value:1},{label:'2x por semana',value:2},{label:'3x por semana',value:3}];
-const PROF_MANHA  = 'Andriele Barbosa Lopes';
-const PROF_TARDE  = 'Jessica Rodrigues Ribeiro';
 
-// CPFs dos admins — comparação feita só no cliente, Firebase Auth anônimo para leitura
-const ADMINS = [
-  {cpf:'08439510446', name:'Anderson Macena',           role:'admin'},
-  {cpf:'12582241601', name:'Jessica Rodrigues Ribeiro', role:'admin'},
-  {cpf:'04712284196', name:'Andriele Barbosa Lopes',    role:'admin'},
-  {cpf:'68930925120', name:'Mariana Soares Muniz',      role:'admin'},
-];
+// Profissionais lidos de variáveis de ambiente
+const PROF_MANHA  = import.meta.env.VITE_PROF_MANHA || 'Fisioterapeuta Manhã';
+const PROF_TARDE  = import.meta.env.VITE_PROF_TARDE  || 'Fisioterapeuta Tarde';
+
+// Lista de admins lida de variável de ambiente (JSON)
+// Formato: [{"cpf":"00000000000","name":"Nome","role":"admin"}]
+const ADMINS = (() => {
+  try {
+    const raw = import.meta.env.VITE_ADMINS;
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+})();
 
 const ST = {
   pendente:            {bg:'bg-gray-600',     border:'border-gray-500',    label:'Agendado'},
