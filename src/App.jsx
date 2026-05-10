@@ -89,6 +89,38 @@ const dateForDay = name => {
 
 const ts = () => new Date().toISOString();
 
+// ── Validação de CPF (algoritmo oficial brasileiro) ───────────────────────────
+const validarCPF = cpf => {
+  const n = cpf.replace(/\D/g,'');
+  if(n.length!==11||/^(\d)\1+$/.test(n)) return false;
+  const calc = (len) => {
+    let s=0;
+    for(let i=0;i<len;i++) s+=parseInt(n[i])*(len+1-i);
+    const r=(s*10)%11;
+    return r===10||r===11?0:r;
+  };
+  return calc(9)===parseInt(n[9])&&calc(10)===parseInt(n[10]);
+};
+
+// ── Chave única da semana (ex: "2025-W22") para controle de renovação ─────────
+const getWeekKey = () => {
+  const d=new Date(); d.setHours(0,0,0,0);
+  // Ajusta para segunda-feira
+  const day=d.getDay(); const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  const jan1=new Date(d.getFullYear(),0,1);
+  const week=Math.ceil(((d-jan1)/864e5+jan1.getDay()+1)/7);
+  return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+};
+
+// ── Data de uma segunda-feira da próxima semana ────────────────────────────────
+const getNextWeekMonday = () => {
+  const d=new Date(); d.setHours(0,0,0,0);
+  const day=d.getDay(); const diff=day===0?1:8-day; // próxima segunda
+  d.setDate(d.getDate()+diff);
+  return d;
+};
+
 // ─── COMPONENTES ATÔMICOS ────────────────────────────────────────────────────
 const NavItem = ({active,icon,label,onClick}) => (
   <button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all whitespace-nowrap ${active?'bg-emerald-500 text-black font-black shadow-sm':'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
@@ -380,6 +412,56 @@ export default function App() {
     });
   },[students,schedules,fbUser]);
 
+  // ── Renovação automática da agenda semanal ───────────────────────────────────
+  // Roda sempre que schedules ou students mudam.
+  // Se hoje é sábado/domingo E a semana atual ainda não foi criada, gera os
+  // agendamentos fixos de todos os alunos ativos para a próxima semana.
+  useEffect(()=>{
+    if(!fbUser||!user||user.role!=='admin') return;
+    const today=new Date(); today.setHours(0,0,0,0);
+    const dow=today.getDay(); // 0=dom, 6=sab
+    // Só executa a partir de sexta (5), sábado (6) ou domingo (0)
+    if(dow!==5&&dow!==6&&dow!==0) return;
+
+    const nextWeekKey=getWeekKey(); // chave da semana que começa na próxima segunda
+    // Se já existe algum agendamento com essa weekKey, não duplica
+    const alreadyCreated=schedules.some(s=>s.weekKey===nextWeekKey);
+    if(alreadyCreated) return;
+
+    const nextMonday=getNextWeekMonday();
+    const dayMap={Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
+
+    // Alunos com plano ainda ativo (daysUntilEnd >= 0)
+    const activeStudents=students.filter(s=>{ const d=daysUntilEnd(s.endDate); return d===null||d>=0; });
+
+    const create = async ()=>{
+      let count=0;
+      for(const s of activeStudents){
+        for(const fs of (s.fixedSchedules||[])){
+          const offset=dayMap[fs.day]??0;
+          const aula=new Date(nextMonday);
+          aula.setDate(nextMonday.getDate()+offset);
+          const dateStr=aula.toISOString().split('T')[0];
+          // Verifica se esse agendamento específico já existe (mesmo aluno + dia + hora + data)
+          const exists=schedules.some(sc=>sc.studentId===s.id&&sc.day===fs.day&&sc.hour===fs.hour&&sc.scheduleDate===dateStr);
+          if(!exists){
+            await addDoc(C.schedules(),{
+              name:s.name, studentId:s.id, day:fs.day, hour:fs.hour,
+              status:'pendente', isFixed:true,
+              scheduleDate:dateStr,   // data exata da aula
+              weekKey:nextWeekKey,    // chave da semana para controle de duplicata
+              createdBy:'Sistema', createdAt:ts()
+            }).catch(console.error);
+            count++;
+          }
+        }
+      }
+      if(count>0)
+        await addDoc(C.logs(),{action:`📅 Agenda da semana ${nextWeekKey} criada automaticamente (${count} aulas).`,user:'Sistema',timestamp:ts(),type:'weekly_renewal'}).catch(console.error);
+    };
+    create();
+  },[students,schedules,fbUser]);
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   const log = async (action,extra={})=>{
     if(!fbUser) return;
@@ -398,11 +480,20 @@ export default function App() {
     },800);
   };
 
+  const [cpfError,setCpfError] = useState('');
+
   const handleAddStudent = async e=>{
-    e.preventDefault(); if(isSubmitting||!fbUser) return; setIsSubmitting(true);
+    e.preventDefault(); if(isSubmitting||!fbUser) return;
+    // Valida CPF antes de salvar
+    const cpfLimpo=newStudent.cpf.replace(/\D/g,'');
+    if(!validarCPF(cpfLimpo)){setCpfError('CPF inválido. Verifique os números digitados.');return;}
+    // Verifica duplicata
+    if(students.some(s=>s.cpf===cpfLimpo)){setCpfError('Já existe um aluno cadastrado com esse CPF.');return;}
+    setCpfError('');
+    setIsSubmitting(true);
     try{
       const freq = FREQS.find(f=>f.value===Number(newStudent.frequency));
-      const data = {...newStudent, cpf:newStudent.cpf.replace(/\D/g,''), createdAt:ts(), frequencyLabel:freq?.label||'1x por semana'};
+      const data = {...newStudent, cpf:cpfLimpo, createdAt:ts(), frequencyLabel:freq?.label||'1x por semana'};
       const ref  = await addDoc(C.students(), data);
       for(const s of newStudent.fixedSchedules)
         await addDoc(C.schedules(),{name:data.name,studentId:ref.id,day:s.day,hour:s.hour,status:'pendente',isFixed:true,createdBy:user.name,createdAt:ts()});
@@ -972,7 +1063,49 @@ export default function App() {
           <form onSubmit={handleAddStudent} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InputGroup label="Nome *"          value={newStudent.name}      onChange={v=>setNewStudent({...newStudent,name:v})} required/>
-              <InputGroup label="CPF *"           value={newStudent.cpf}       onChange={v=>setNewStudent({...newStudent,cpf:v})} required/>
+              {/* CPF com validação em tempo real */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">CPF * <span className="text-[8px] normal-case font-normal">(apenas números)</span></label>
+                <div className="relative">
+                  <input
+                    type="text" maxLength={14}
+                    placeholder="000.000.000-00"
+                    className={`w-full bg-white border rounded-2xl p-4 text-sm text-gray-900 outline-none transition-all shadow-sm font-mono ${
+                      newStudent.cpf.replace(/\D/g,'').length===11
+                        ? validarCPF(newStudent.cpf.replace(/\D/g,''))
+                          ? 'border-emerald-400 focus:border-emerald-500'
+                          : 'border-rose-400 focus:border-rose-500'
+                        : 'border-gray-200 focus:border-emerald-400'
+                    }`}
+                    value={newStudent.cpf}
+                    onChange={e=>{
+                      setCpfError('');
+                      // Formata automaticamente: 000.000.000-00
+                      const digits=e.target.value.replace(/\D/g,'').slice(0,11);
+                      let fmt=digits;
+                      if(digits.length>9)      fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6,9)}-${digits.slice(9)}`;
+                      else if(digits.length>6) fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6)}`;
+                      else if(digits.length>3) fmt=`${digits.slice(0,3)}.${digits.slice(3)}`;
+                      setNewStudent({...newStudent,cpf:fmt});
+                    }}
+                    required
+                  />
+                  {newStudent.cpf.replace(/\D/g,'').length===11&&(
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      {validarCPF(newStudent.cpf.replace(/\D/g,''))
+                        ? <CheckCircle2 size={18} className="text-emerald-500"/>
+                        : <AlertCircle  size={18} className="text-rose-500"/>}
+                    </div>
+                  )}
+                </div>
+                {cpfError&&<p className="text-[10px] text-rose-600 font-bold ml-1 flex items-center gap-1"><AlertCircle size={10}/>{cpfError}</p>}
+                {newStudent.cpf.replace(/\D/g,'').length===11&&!validarCPF(newStudent.cpf.replace(/\D/g,''))&&!cpfError&&(
+                  <p className="text-[10px] text-rose-500 font-bold ml-1 flex items-center gap-1"><AlertCircle size={10}/>CPF inválido</p>
+                )}
+                {newStudent.cpf.replace(/\D/g,'').length===11&&validarCPF(newStudent.cpf.replace(/\D/g,''))&&(
+                  <p className="text-[10px] text-emerald-600 font-bold ml-1 flex items-center gap-1"><CheckCircle2 size={10}/>CPF válido</p>
+                )}
+              </div>
               <InputGroup label="Nascimento" type="date" value={newStudent.birthDate} onChange={v=>setNewStudent({...newStudent,birthDate:v})}/>
               <InputGroup label="WhatsApp"        value={newStudent.phone}     onChange={v=>setNewStudent({...newStudent,phone:v})}/>
               <InputGroup label="E-mail" type="email" value={newStudent.email} onChange={v=>setNewStudent({...newStudent,email:v})}/>
