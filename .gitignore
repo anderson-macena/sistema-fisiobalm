@@ -1,24 +1,26 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# ─── Variáveis de ambiente (NUNCA commitar) ──────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
 
-node_modules
-dist
-dist-ssr
-*.local
+# ─── Dependências ─────────────────────────────────────────────────────────────
+node_modules/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
+# ─── Build ────────────────────────────────────────────────────────────────────
+dist/
+build/
+.vite/
+
+# ─── IDEs ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+
+# ─── Sistema ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
