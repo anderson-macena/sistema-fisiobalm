@@ -105,7 +105,19 @@ const validarCPF = cpf => {
   return calc(9)===parseInt(n[9])&&calc(10)===parseInt(n[10]);
 };
 
-// ── Chave única da PRÓXIMA semana (ex: "2025-W23") para controle de renovação ─
+// ── Chave da semana ATUAL (ex: "2025-W20") ────────────────────────────────────
+const getCurrentWeekKey = () => {
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  // Recua para a segunda-feira da semana atual
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diffToMon);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - jan1) / 864e5 + jan1.getDay() + 1) / 7);
+  return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+};
+
+// ── Chave da PRÓXIMA semana (ex: "2025-W21") ──────────────────────────────────
 const getWeekKey = () => {
   // Calcula a segunda-feira da PRÓXIMA semana
   const d = new Date(); d.setHours(0,0,0,0);
@@ -480,6 +492,37 @@ export default function App() {
     create();
   },[students,schedules,logs,fbUser]);
 
+  // ── Limpeza automática de aulas não-fixas de semanas anteriores ───────────────
+  // Remove da agenda qualquer agendamento que NÃO seja fixo (reposição,
+  // experimental, manual) e cujo weekKey seja de uma semana já encerrada.
+  // Aulas fixas (isFixed:true) são preservadas — só expiram com o plano.
+  useEffect(()=>{
+    if(!fbUser||!user||user.role!=='admin') return;
+    if(!schedules.length) return;
+
+    const currentKey = getCurrentWeekKey(); // chave da semana ATUAL
+
+    const cleanup = async ()=>{
+      const toDelete = schedules.filter(sc=>{
+        // Preserva aulas fixas criadas pelo cadastro
+        if(sc.isFixed) return false;
+        // Preserva se não tem weekKey (agendamentos antigos sem chave — ignora)
+        if(!sc.weekKey) return false;
+        // Remove se a weekKey é de semana anterior à atual
+        return sc.weekKey < currentKey;
+      });
+      for(const sc of toDelete){
+        await deleteDoc(C.schedule(sc.id)).catch(console.error);
+      }
+      if(toDelete.length>0)
+        await addDoc(C.logs(),{
+          action:`🧹 Limpeza: ${toDelete.length} aula(s) não-fixas de semanas anteriores removidas.`,
+          user:'Sistema', timestamp:ts(), type:'weekly_cleanup'
+        }).catch(console.error);
+    };
+    cleanup();
+  },[schedules,fbUser]);
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   const log = async (action,extra={})=>{
     if(!fbUser) return;
@@ -548,7 +591,14 @@ export default function App() {
 
   const handleReposicao = async hour=>{
     if(!user||(user.credits||0)<=0) return;
-    await addDoc(C.schedules(),{name:user.name,studentId:user.id,day:selectedDay,hour,status:'reposicao',createdBy:user.name,createdAt:ts()});
+    await addDoc(C.schedules(),{
+      name:user.name, studentId:user.id,
+      day:selectedDay, hour,
+      status:'reposicao',
+      isFixed:false,              // não é aula fixa — uso único
+      weekKey:getCurrentWeekKey(), // será limpa ao virar a semana
+      createdBy:user.name, createdAt:ts()
+    });
     await updateDoc(C.student(user.id),{credits:increment(-1)});
     await log(`${user.name} agendou reposição ${selectedDay} ${hour}`);
   };
@@ -1053,7 +1103,14 @@ export default function App() {
             e.preventDefault();
             const name=scheduleForm.manualName||students.find(s=>s.id===scheduleForm.studentId)?.name;
             if(!name) return;
-            await addDoc(C.schedules(),{name,studentId:scheduleForm.studentId||null,day:selectedDay,hour:scheduleModal.hour,status:scheduleForm.status,createdBy:user.name,createdAt:ts()});
+            await addDoc(C.schedules(),{
+              name, studentId:scheduleForm.studentId||null,
+              day:selectedDay, hour:scheduleModal.hour,
+              status:scheduleForm.status,
+              isFixed:false,                    // não é aula fixa — será limpa na virada da semana
+              weekKey:getCurrentWeekKey(),       // chave da semana atual
+              createdBy:user.name, createdAt:ts()
+            });
             await log(`Agendou ${name} — ${selectedDay} ${scheduleModal.hour}`);
             setScheduleModal(null);setScheduleForm({studentId:'',manualName:'',status:'pendente'});
           }} className="space-y-4">

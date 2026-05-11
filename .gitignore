@@ -1,4 +1,4 @@
-# ─── Variáveis de ambiente (NUNCA commitar) ──────────────────────────────────
+# ─── VARIÁVEIS DE AMBIENTE — NUNCA commitar ───────────────────────────────────
 .env
 .env.local
 .env.development
@@ -14,12 +14,10 @@ build/
 .vite/
 
 # ─── IDEs ─────────────────────────────────────────────────────────────────────
-.vscode/
+.vscode/settings.json
 .idea/
 *.suo
 *.ntvs*
-*.njsproj
-*.sln
 
 # ─── Sistema ──────────────────────────────────────────────────────────────────
 .DS_Store
