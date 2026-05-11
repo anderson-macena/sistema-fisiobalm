@@ -358,6 +358,8 @@ export default function App() {
   const [isLoggingIn,setIsLoggingIn]   = useState(false);
   const [searchTerm,setSearchTerm]     = useState('');
   const [newEvolution,setNewEvolution] = useState('');
+  const [editEvoId,setEditEvoId]       = useState(null);
+  const [editEvoText,setEditEvoText]   = useState('');
   const [isSubmitting,setIsSubmitting] = useState(false);
   const [alunosSubTab,setAlunosSubTab] = useState('todos');
   const [dashSubTab,setDashSubTab]     = useState('geral');
@@ -1113,7 +1115,7 @@ export default function App() {
 
       {/* Prontuário */}
       {prontuarioStu&&isAdmin&&(
-        <Modal title={`Prontuário — ${prontuarioStu.name}`} onClose={()=>setProntuarioId(null)} size="lg">
+        <Modal title={`Prontuário — ${prontuarioStu.name}`} onClose={()=>{setProntuarioId(null);setEditEvoId(null);setEditEvoText('');}} size="lg">
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
             <p className="text-[9px] font-black uppercase text-emerald-600 mb-3">Nova Evolução</p>
             <textarea placeholder="Descreva a evolução clínica..." className="w-full bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-900 outline-none h-28 resize-none focus:border-emerald-400 shadow-sm" value={newEvolution} onChange={e=>setNewEvolution(e.target.value)}/>
@@ -1123,9 +1125,72 @@ export default function App() {
           </div>
           <div className="space-y-3">
             {evolutions.filter(e=>e.studentId===prontuarioStu.id).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).map(e=>(
-              <div key={e.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-                <div className="flex justify-between mb-2 text-[9px] font-black uppercase"><span className="text-emerald-600">{new Date(e.timestamp).toLocaleDateString()}</span><span className="text-gray-400">{e.author}</span></div>
-                <p className="text-sm text-gray-700 italic">"{e.content}"</p>
+              <div key={e.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm group">
+                {/* Cabeçalho: data, autor e botões */}
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[9px] font-black uppercase text-emerald-600">{new Date(e.timestamp).toLocaleDateString()}</span>
+                    <span className="text-[9px] font-black uppercase text-gray-400">{e.author}</span>
+                  </div>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                    {/* Botão Editar */}
+                    <button
+                      onClick={()=>{ setEditEvoId(e.id); setEditEvoText(e.content); }}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-emerald-100 hover:text-emerald-700 transition-all text-[9px] font-black uppercase border border-gray-200"
+                      title="Editar evolução"
+                    >
+                      <Edit3 size={11}/> Editar
+                    </button>
+                    {/* Botão Excluir */}
+                    <button
+                      onClick={async()=>{
+                        if(!confirm('Excluir esta evolução permanentemente?')) return;
+                        await deleteDoc(C.evolution(e.id));
+                        await log(`Excluiu evolução de ${prontuarioStu.name}`);
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition-all text-[9px] font-black uppercase border border-gray-200"
+                      title="Excluir evolução"
+                    >
+                      <Trash2 size={11}/> Excluir
+                    </button>
+                  </div>
+                </div>
+
+                {/* Conteúdo — modo edição ou leitura */}
+                {editEvoId===e.id ? (
+                  <div className="space-y-3">
+                    <textarea
+                      className="w-full bg-gray-50 border border-emerald-300 rounded-xl p-4 text-sm text-gray-900 outline-none resize-none h-28 focus:border-emerald-500 shadow-sm"
+                      value={editEvoText}
+                      onChange={ev=>setEditEvoText(ev.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={()=>{ setEditEvoId(null); setEditEvoText(''); }}
+                        className="px-4 py-2 text-gray-500 font-black text-[9px] uppercase hover:text-gray-800 transition-all"
+                      >Cancelar</button>
+                      <button
+                        onClick={async()=>{
+                          if(!editEvoText.trim()) return;
+                          await updateDoc(C.evolution(e.id),{content:editEvoText, editedAt:ts(), editedBy:user.name});
+                          await log(`Editou evolução de ${prontuarioStu.name}`);
+                          setEditEvoId(null); setEditEvoText('');
+                        }}
+                        className="flex items-center gap-1 px-4 py-2 bg-emerald-500 text-black font-black text-[9px] uppercase rounded-xl hover:bg-emerald-400 transition-all"
+                      ><Save size={12}/>Salvar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-gray-700 italic">"{e.content}"</p>
+                    {e.editedAt&&(
+                      <p className="text-[8px] text-gray-400 font-bold uppercase mt-2">
+                        Editado em {new Date(e.editedAt).toLocaleDateString()} por {e.editedBy}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {evolutions.filter(e=>e.studentId===prontuarioStu.id).length===0&&<p className="text-center text-gray-400 text-[10px] font-black uppercase py-8">Nenhuma evolução</p>}
