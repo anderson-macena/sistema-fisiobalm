@@ -11,26 +11,16 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 
 // ─── FIREBASE ────────────────────────────────────────────────────────────────
-// As credenciais são lidas de variáveis de ambiente (.env) — nunca hardcoded.
-// Em produção no canvas/Claude, __firebase_config é injetado automaticamente.
 const FB_CONFIG = typeof __firebase_config !== 'undefined'
   ? JSON.parse(__firebase_config)
-  : {
-      apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId:             import.meta.env.VITE_FIREBASE_APP_ID,
-    };
+  : { apiKey:"AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM", authDomain:"fisiobalm-26532.firebaseapp.com",
+      projectId:"fisiobalm-26532", storageBucket:"fisiobalm-26532.firebasestorage.app",
+      messagingSenderId:"498080566980", appId:"1:498080566980:web:07c3ca7fe7869b4aab8391" };
 
 const fbApp = getApps().length ? getApp() : initializeApp(FB_CONFIG);
 const auth  = getAuth(fbApp);
 const db    = getFirestore(fbApp);
-const APP_ID = (() => {
-  try { return typeof __app_id !== 'undefined' ? __app_id : import.meta.env.VITE_APP_ID || 'fisiobalm-v1'; }
-  catch { return import.meta.env.VITE_APP_ID || 'fisiobalm-v1'; }
-})();
+const APP_ID = (() => { try { return typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-v1'; } catch { return 'fisiobalm-v1'; } })();
 
 // ─── Caminhos Firestore centralizados num único lugar ────────────────────────
 // Todos os dados ficam em: fisiobalm/{APP_ID}/
@@ -55,19 +45,16 @@ const HOURS_T     = ['15:00','16:00','17:00','18:00','19:00','20:00'];
 const ALL_HOURS   = [...HOURS_M, ...HOURS_T];
 const PLANOS      = ['Mensal','Trimestral','Semestral'];
 const FREQS       = [{label:'1x por semana',value:1},{label:'2x por semana',value:2},{label:'3x por semana',value:3}];
+const PROF_MANHA  = 'Andriele Barbosa Lopes';
+const PROF_TARDE  = 'Jessica Rodrigues Ribeiro';
 
-// Profissionais lidos de variáveis de ambiente
-const PROF_MANHA  = import.meta.env.VITE_PROF_MANHA || 'Fisioterapeuta Manhã';
-const PROF_TARDE  = import.meta.env.VITE_PROF_TARDE  || 'Fisioterapeuta Tarde';
-
-// Lista de admins lida de variável de ambiente (JSON)
-// Formato: [{"cpf":"00000000000","name":"Nome","role":"admin"}]
-const ADMINS = (() => {
-  try {
-    const raw = import.meta.env.VITE_ADMINS;
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-})();
+// CPFs dos admins — comparação feita só no cliente, Firebase Auth anônimo para leitura
+const ADMINS = [
+  {cpf:'08439510446', name:'Anderson Macena',           role:'admin'},
+  {cpf:'12582241601', name:'Jessica Rodrigues Ribeiro', role:'admin'},
+  {cpf:'04712284196', name:'Andriele Barbosa Lopes',    role:'admin'},
+  {cpf:'68930925120', name:'Mariana Soares Muniz',      role:'admin'},
+];
 
 const ST = {
   pendente:            {bg:'bg-gray-600',     border:'border-gray-500',    label:'Agendado'},
@@ -91,13 +78,16 @@ const daysUntilEnd = end => {
 };
 
 const dateForDay = name => {
-  const map = {Segunda:1,Terça:2,Quarta:3,Quinta:4,Sexta:5};
-  const t = map[name]; if (!t) return '';
-  const today = new Date();
-  const diff = today.getDay()===0 ? -6 : 1-today.getDay();
-  const mon = new Date(today); mon.setDate(today.getDate()+diff);
-  const d = new Date(mon); d.setDate(mon.getDate()+(t-1));
-  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  const map = {Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
+  const offset = map[name];
+  if(offset === undefined) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dow = today.getDay(); // 0=dom,1=seg,...,6=sab
+  // Se for sábado(6) ou domingo(0), mostra a PRÓXIMA semana
+  const daysToMon = dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow;
+  const mon = new Date(today); mon.setDate(today.getDate() + daysToMon);
+  const target = new Date(mon); target.setDate(mon.getDate() + offset);
+  return target.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
 };
 
 const ts = () => new Date().toISOString();
@@ -115,22 +105,26 @@ const validarCPF = cpf => {
   return calc(9)===parseInt(n[9])&&calc(10)===parseInt(n[10]);
 };
 
-// ── Chave única da semana (ex: "2025-W22") para controle de renovação ─────────
+// ── Chave única da PRÓXIMA semana (ex: "2025-W23") para controle de renovação ─
 const getWeekKey = () => {
-  const d=new Date(); d.setHours(0,0,0,0);
-  // Ajusta para segunda-feira
-  const day=d.getDay(); const diff=day===0?-6:1-day;
-  d.setDate(d.getDate()+diff);
-  const jan1=new Date(d.getFullYear(),0,1);
-  const week=Math.ceil(((d-jan1)/864e5+jan1.getDay()+1)/7);
+  // Calcula a segunda-feira da PRÓXIMA semana
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  // Avança para a próxima segunda-feira
+  const daysToNextMon = dow === 0 ? 1 : 8 - dow;
+  d.setDate(d.getDate() + daysToNextMon);
+  // Calcula número da semana ISO da próxima segunda
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - jan1) / 864e5 + jan1.getDay() + 1) / 7);
   return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
 };
 
-// ── Data de uma segunda-feira da próxima semana ────────────────────────────────
+// ── Segunda-feira da próxima semana ──────────────────────────────────────────
 const getNextWeekMonday = () => {
-  const d=new Date(); d.setHours(0,0,0,0);
-  const day=d.getDay(); const diff=day===0?1:8-day; // próxima segunda
-  d.setDate(d.getDate()+diff);
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  const daysToNextMon = dow === 0 ? 1 : 8 - dow;
+  d.setDate(d.getDate() + daysToNextMon);
   return d;
 };
 
@@ -426,54 +420,65 @@ export default function App() {
   },[students,schedules,fbUser]);
 
   // ── Renovação automática da agenda semanal ───────────────────────────────────
-  // Roda sempre que schedules ou students mudam.
-  // Se hoje é sábado/domingo E a semana atual ainda não foi criada, gera os
-  // agendamentos fixos de todos os alunos ativos para a próxima semana.
+  // Executa a partir de sexta-feira — cria os agendamentos da PRÓXIMA semana
+  // para todos os alunos ativos que ainda não foram criados.
   useEffect(()=>{
     if(!fbUser||!user||user.role!=='admin') return;
-    const today=new Date(); today.setHours(0,0,0,0);
-    const dow=today.getDay(); // 0=dom, 6=sab
-    // Só executa a partir de sexta (5), sábado (6) ou domingo (0)
+    if(!students.length) return; // aguarda alunos carregarem
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dow = today.getDay(); // 0=dom,5=sex,6=sab
+    // Só executa na sexta(5), sábado(6) ou domingo(0)
     if(dow!==5&&dow!==6&&dow!==0) return;
 
-    const nextWeekKey=getWeekKey(); // chave da semana que começa na próxima segunda
-    // Se já existe algum agendamento com essa weekKey, não duplica
-    const alreadyCreated=schedules.some(s=>s.weekKey===nextWeekKey);
-    if(alreadyCreated) return;
+    const nextWeekKey = getWeekKey(); // chave da próxima semana
+    const nextMonday  = getNextWeekMonday();
+    const dayMap = {Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
 
-    const nextMonday=getNextWeekMonday();
-    const dayMap={Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
+    // Verifica se a renovação da próxima semana já foi feita
+    // (procura em logs, não em schedules, para maior confiabilidade)
+    const logKey = `weekly_${nextWeekKey}`;
+    const alreadyDone = logs.some(l=>l.logKey===logKey);
+    if(alreadyDone) return;
 
-    // Alunos com plano ainda ativo (daysUntilEnd >= 0)
-    const activeStudents=students.filter(s=>{ const d=daysUntilEnd(s.endDate); return d===null||d>=0; });
+    // Alunos com plano ativo
+    const active = students.filter(s=>{ const d=daysUntilEnd(s.endDate); return d===null||d>=0; });
+    if(!active.length) return;
 
     const create = async ()=>{
       let count=0;
-      for(const s of activeStudents){
+      for(const s of active){
         for(const fs of (s.fixedSchedules||[])){
-          const offset=dayMap[fs.day]??0;
-          const aula=new Date(nextMonday);
-          aula.setDate(nextMonday.getDate()+offset);
-          const dateStr=aula.toISOString().split('T')[0];
-          // Verifica se esse agendamento específico já existe (mesmo aluno + dia + hora + data)
-          const exists=schedules.some(sc=>sc.studentId===s.id&&sc.day===fs.day&&sc.hour===fs.hour&&sc.scheduleDate===dateStr);
+          const offset = dayMap[fs.day]??0;
+          const aulaDate = new Date(nextMonday);
+          aulaDate.setDate(nextMonday.getDate()+offset);
+          const dateStr = aulaDate.toISOString().split('T')[0];
+          // Evita duplicata: mesmo aluno + dia + hora + data exata
+          const exists = schedules.some(sc=>
+            sc.studentId===s.id && sc.day===fs.day &&
+            sc.hour===fs.hour && sc.scheduleDate===dateStr
+          );
           if(!exists){
             await addDoc(C.schedules(),{
-              name:s.name, studentId:s.id, day:fs.day, hour:fs.hour,
+              name:s.name, studentId:s.id,
+              day:fs.day, hour:fs.hour,
               status:'pendente', isFixed:true,
-              scheduleDate:dateStr,   // data exata da aula
-              weekKey:nextWeekKey,    // chave da semana para controle de duplicata
+              scheduleDate:dateStr,
+              weekKey:nextWeekKey,
               createdBy:'Sistema', createdAt:ts()
             }).catch(console.error);
             count++;
           }
         }
       }
-      if(count>0)
-        await addDoc(C.logs(),{action:`📅 Agenda da semana ${nextWeekKey} criada automaticamente (${count} aulas).`,user:'Sistema',timestamp:ts(),type:'weekly_renewal'}).catch(console.error);
+      // Registra no log com logKey para não repetir
+      await addDoc(C.logs(),{
+        action:`📅 Agenda ${nextWeekKey} criada automaticamente (${count} aula${count!==1?'s':''}).`,
+        user:'Sistema', timestamp:ts(), logKey, type:'weekly_renewal'
+      }).catch(console.error);
     };
     create();
-  },[students,schedules,fbUser]);
+  },[students,schedules,logs,fbUser]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const log = async (action,extra={})=>{
