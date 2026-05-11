@@ -431,29 +431,103 @@ export default function App() {
     });
   },[students,schedules,fbUser]);
 
-  // ── Renovação automática da agenda semanal ───────────────────────────────────
-  // Executa a partir de sexta-feira — cria os agendamentos da PRÓXIMA semana
-  // para todos os alunos ativos que ainda não foram criados.
+  // ── Gestão semanal da agenda ─────────────────────────────────────────────────
+  // Roda sempre que schedules, students ou logs mudam (quando admin está logado).
+  // Lógica:
+  //   1. Apaga TODOS os schedules de semanas anteriores (fixos ou não)
+  //   2. Se a semana atual ainda não tem aulas fixas criadas, cria todas com status "pendente"
+  // Resultado: Anderson faltou semana passada? Na segunda seguinte aparece "Agendado" limpo.
   useEffect(()=>{
     if(!fbUser||!user||user.role!=='admin') return;
-    if(!students.length) return; // aguarda alunos carregarem
+    if(!students.length||!schedules.length&&!logs.length) return;
 
-    const today = new Date(); today.setHours(0,0,0,0);
-    const dow = today.getDay(); // 0=dom,5=sex,6=sab
-    // Só executa na sexta(5), sábado(6) ou domingo(0)
-    if(dow!==5&&dow!==6&&dow!==0) return;
-
-    const nextWeekKey = getWeekKey(); // chave da próxima semana
-    const nextMonday  = getNextWeekMonday();
+    const currentKey = getCurrentWeekKey();
     const dayMap = {Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
 
-    // Verifica se a renovação da próxima semana já foi feita
-    // (procura em logs, não em schedules, para maior confiabilidade)
-    const logKey = `weekly_${nextWeekKey}`;
-    const alreadyDone = logs.some(l=>l.logKey===logKey);
-    if(alreadyDone) return;
+    // Segunda-feira da semana ATUAL
+    const getThisWeekMonday = ()=>{
+      const d = new Date(); d.setHours(0,0,0,0);
+      const dow = d.getDay();
+      const diff = dow===0 ? -6 : 1-dow;
+      d.setDate(d.getDate()+diff);
+      return d;
+    };
 
-    // Alunos com plano ativo
+    const manage = async ()=>{
+      // ── PASSO 1: Apaga TUDO de semanas anteriores ──────────────────────────
+      // Inclui fixas com status "falta", "concluida" etc — já foram registradas,
+      // não devem aparecer na nova semana.
+      const oldSchedules = schedules.filter(sc=>{
+        if(!sc.weekKey) return false;          // sem weekKey = antigo, ignora
+        return sc.weekKey < currentKey;        // de semana anterior
+      });
+      for(const sc of oldSchedules){
+        await deleteDoc(C.schedule(sc.id)).catch(console.error);
+      }
+
+      // ── PASSO 2: Cria aulas fixas da semana atual se ainda não existem ─────
+      const renewKey = `weekly_${currentKey}`;
+      const alreadyCreated = logs.some(l=>l.logKey===renewKey);
+      if(alreadyCreated) return;
+
+      const thisMonday = getThisWeekMonday();
+      const active = students.filter(s=>{ const d=daysUntilEnd(s.endDate); return d===null||d>=0; });
+      let count=0;
+
+      for(const s of active){
+        for(const fs of (s.fixedSchedules||[])){
+          const offset = dayMap[fs.day]??0;
+          const aulaDate = new Date(thisMonday);
+          aulaDate.setDate(thisMonday.getDate()+offset);
+          const dateStr = aulaDate.toISOString().split('T')[0];
+
+          // Evita duplicata (caso o log falhe e rode duas vezes)
+          const exists = schedules.some(sc=>
+            sc.studentId===s.id && sc.day===fs.day &&
+            sc.hour===fs.hour  && sc.weekKey===currentKey
+          );
+          if(!exists){
+            await addDoc(C.schedules(),{
+              name:s.name, studentId:s.id,
+              day:fs.day,  hour:fs.hour,
+              status:'pendente',     // sempre começa limpo
+              isFixed:true,
+              scheduleDate:dateStr,
+              weekKey:currentKey,    // chave da semana ATUAL
+              createdBy:'Sistema',   createdAt:ts()
+            }).catch(console.error);
+            count++;
+          }
+        }
+      }
+
+      // Marca como feito no log
+      await addDoc(C.logs(),{
+        action:`📅 Agenda ${currentKey} criada (${count} aula${count!==1?'s':''}). ${oldSchedules.length>0?`| 🧹 ${oldSchedules.length} registro(s) antigo(s) removido(s).`:''}`,
+        user:'Sistema', timestamp:ts(), logKey:renewKey, type:'weekly_renewal'
+      }).catch(console.error);
+    };
+
+    manage();
+  },[students,schedules,logs,fbUser]);
+
+  // ── Renovação da PRÓXIMA semana (sexta/sábado/domingo) ───────────────────────
+  // Antecipa a criação das aulas fixas da próxima semana para que no domingo
+  // à noite / segunda de manhã a agenda já esteja pronta.
+  useEffect(()=>{
+    if(!fbUser||!user||user.role!=='admin') return;
+    if(!students.length) return;
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dow = today.getDay();
+    if(dow!==5&&dow!==6&&dow!==0) return; // só sex/sáb/dom
+
+    const nextKey    = getWeekKey();
+    const nextMonday = getNextWeekMonday();
+    const dayMap     = {Segunda:0,Terça:1,Quarta:2,Quinta:3,Sexta:4};
+    const logKey     = `weekly_${nextKey}`;
+    if(logs.some(l=>l.logKey===logKey)) return; // já criado
+
     const active = students.filter(s=>{ const d=daysUntilEnd(s.endDate); return d===null||d>=0; });
     if(!active.length) return;
 
@@ -465,63 +539,29 @@ export default function App() {
           const aulaDate = new Date(nextMonday);
           aulaDate.setDate(nextMonday.getDate()+offset);
           const dateStr = aulaDate.toISOString().split('T')[0];
-          // Evita duplicata: mesmo aluno + dia + hora + data exata
           const exists = schedules.some(sc=>
             sc.studentId===s.id && sc.day===fs.day &&
-            sc.hour===fs.hour && sc.scheduleDate===dateStr
+            sc.hour===fs.hour  && sc.weekKey===nextKey
           );
           if(!exists){
             await addDoc(C.schedules(),{
               name:s.name, studentId:s.id,
-              day:fs.day, hour:fs.hour,
+              day:fs.day,  hour:fs.hour,
               status:'pendente', isFixed:true,
-              scheduleDate:dateStr,
-              weekKey:nextWeekKey,
+              scheduleDate:dateStr, weekKey:nextKey,
               createdBy:'Sistema', createdAt:ts()
             }).catch(console.error);
             count++;
           }
         }
       }
-      // Registra no log com logKey para não repetir
       await addDoc(C.logs(),{
-        action:`📅 Agenda ${nextWeekKey} criada automaticamente (${count} aula${count!==1?'s':''}).`,
+        action:`📅 Agenda ${nextKey} preparada antecipadamente (${count} aula${count!==1?'s':''}).`,
         user:'Sistema', timestamp:ts(), logKey, type:'weekly_renewal'
       }).catch(console.error);
     };
     create();
   },[students,schedules,logs,fbUser]);
-
-  // ── Limpeza automática de aulas não-fixas de semanas anteriores ───────────────
-  // Remove da agenda qualquer agendamento que NÃO seja fixo (reposição,
-  // experimental, manual) e cujo weekKey seja de uma semana já encerrada.
-  // Aulas fixas (isFixed:true) são preservadas — só expiram com o plano.
-  useEffect(()=>{
-    if(!fbUser||!user||user.role!=='admin') return;
-    if(!schedules.length) return;
-
-    const currentKey = getCurrentWeekKey(); // chave da semana ATUAL
-
-    const cleanup = async ()=>{
-      const toDelete = schedules.filter(sc=>{
-        // Preserva aulas fixas criadas pelo cadastro
-        if(sc.isFixed) return false;
-        // Preserva se não tem weekKey (agendamentos antigos sem chave — ignora)
-        if(!sc.weekKey) return false;
-        // Remove se a weekKey é de semana anterior à atual
-        return sc.weekKey < currentKey;
-      });
-      for(const sc of toDelete){
-        await deleteDoc(C.schedule(sc.id)).catch(console.error);
-      }
-      if(toDelete.length>0)
-        await addDoc(C.logs(),{
-          action:`🧹 Limpeza: ${toDelete.length} aula(s) não-fixas de semanas anteriores removidas.`,
-          user:'Sistema', timestamp:ts(), type:'weekly_cleanup'
-        }).catch(console.error);
-    };
-    cleanup();
-  },[schedules,fbUser]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const log = async (action,extra={})=>{
