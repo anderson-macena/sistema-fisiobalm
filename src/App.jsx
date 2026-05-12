@@ -11,50 +11,63 @@ import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 
 // ─── FIREBASE ────────────────────────────────────────────────────────────────
-const FB_CONFIG = typeof __firebase_config !== 'undefined'
-  ? JSON.parse(__firebase_config)
-  : { apiKey:"AIzaSyBs65ZgCmJpXPjAqK-tOqF6HE2FqTT65UM", authDomain:"fisiobalm-26532.firebaseapp.com",
-      projectId:"fisiobalm-26532", storageBucket:"fisiobalm-26532.firebasestorage.app",
-      messagingSenderId:"498080566980", appId:"1:498080566980:web:07c3ca7fe7869b4aab8391" };
+// Lê credenciais do ambiente (.env via Vite) ou da variável injetada pelo canvas.
+// NUNCA coloque dados reais aqui — use o arquivo .env (ver .env.example).
+const _rawConfig = (() => {
+  try { return typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null; }
+  catch { return null; }
+})();
+
+const FB_CONFIG = _rawConfig ?? {
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
 const fbApp = getApps().length ? getApp() : initializeApp(FB_CONFIG);
 const auth  = getAuth(fbApp);
 const db    = getFirestore(fbApp);
-const APP_ID = (() => { try { return typeof __app_id !== 'undefined' ? __app_id : 'fisiobalm-v1'; } catch { return 'fisiobalm-v1'; } })();
 
-// ─── Caminhos Firestore centralizados num único lugar ────────────────────────
-// Todos os dados ficam em: fisiobalm/{APP_ID}/
-// Subcolecções: students, schedules, logs, evolutions, anexos
+const APP_ID = (() => {
+  try { return typeof __app_id !== 'undefined' ? __app_id : (import.meta.env.VITE_APP_ID || 'fisiobalm-v1'); }
+  catch { return import.meta.env.VITE_APP_ID || 'fisiobalm-v1'; }
+})();
+
+// ─── Caminhos Firestore centralizados ────────────────────────────────────────
 const C = {
   students:   () => collection(db, 'fisiobalm', APP_ID, 'students'),
   schedules:  () => collection(db, 'fisiobalm', APP_ID, 'schedules'),
   logs:       () => collection(db, 'fisiobalm', APP_ID, 'logs'),
   evolutions: () => collection(db, 'fisiobalm', APP_ID, 'evolutions'),
   anexos:     () => collection(db, 'fisiobalm', APP_ID, 'anexos'),
+  // Admins agora ficam no Firestore para permitir gerenciamento pelo app
+  admins:     () => collection(db, 'fisiobalm', APP_ID, 'admins'),
   student:    id => doc(db, 'fisiobalm', APP_ID, 'students',   id),
   schedule:   id => doc(db, 'fisiobalm', APP_ID, 'schedules',  id),
   log:        id => doc(db, 'fisiobalm', APP_ID, 'logs',       id),
   evolution:  id => doc(db, 'fisiobalm', APP_ID, 'evolutions', id),
   anexo:      id => doc(db, 'fisiobalm', APP_ID, 'anexos',     id),
+  admin:      id => doc(db, 'fisiobalm', APP_ID, 'admins',     id),
 };
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
-const DAYS        = ['Segunda','Terça','Quarta','Quinta','Sexta'];
-const HOURS_M     = ['07:00','08:00','09:00','10:00','11:00','12:00'];
-const HOURS_T     = ['15:00','16:00','17:00','18:00','19:00','20:00'];
-const ALL_HOURS   = [...HOURS_M, ...HOURS_T];
-const PLANOS      = ['Mensal','Trimestral','Semestral'];
-const FREQS       = [{label:'1x por semana',value:1},{label:'2x por semana',value:2},{label:'3x por semana',value:3}];
-const PROF_MANHA  = 'Andriele Barbosa Lopes';
-const PROF_TARDE  = 'Jessica Rodrigues Ribeiro';
+const DAYS      = ['Segunda','Terça','Quarta','Quinta','Sexta'];
+const HOURS_M   = ['07:00','08:00','09:00','10:00','11:00','12:00'];
+const HOURS_T   = ['15:00','16:00','17:00','18:00','19:00','20:00'];
+const ALL_HOURS = [...HOURS_M, ...HOURS_T];
+const PLANOS    = ['Mensal','Trimestral','Semestral'];
+const FREQS     = [{label:'1x por semana',value:1},{label:'2x por semana',value:2},{label:'3x por semana',value:3}];
 
-// CPFs dos admins — comparação feita só no cliente, Firebase Auth anônimo para leitura
-const ADMINS = [
-  {cpf:'08439510446', name:'Anderson Macena',           role:'admin'},
-  {cpf:'12582241601', name:'Jessica Rodrigues Ribeiro', role:'admin'},
-  {cpf:'04712284196', name:'Andriele Barbosa Lopes',    role:'admin'},
-  {cpf:'68930925120', name:'Mariana Soares Muniz',      role:'admin'},
-];
+// Profissionais por turno — lidos do .env, sem dados hardcoded
+const PROF_MANHA = import.meta.env.VITE_PROF_MANHA || 'Fisioterapeuta Manhã';
+const PROF_TARDE = import.meta.env.VITE_PROF_TARDE  || 'Fisioterapeuta Tarde';
+
+// Admin raiz — lido do .env — único admin que não pode ser excluído pelo app
+// É usado apenas para o primeiro acesso e seed inicial dos admins no Firestore
+const ROOT_ADMIN_CPF = (import.meta.env.VITE_ROOT_ADMIN_CPF || '').replace(/\D/g,'');
 
 const ST = {
   pendente:            {bg:'bg-gray-600',     border:'border-gray-500',    label:'Agendado'},
@@ -343,27 +356,31 @@ const AnexosModal = ({student,onClose,userName,createLog}) => {
 // ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
 export default function App() {
   // State
-  const [user,setUser]                 = useState(null);
-  const [fbUser,setFbUser]             = useState(null);
-  const [activeTab,setActiveTab]       = useState('agenda');
-  const [selectedDay,setSelectedDay]   = useState('Segunda');
-  const [activeTurno,setActiveTurno]   = useState('manha');
-  const [schedules,setSchedules]       = useState([]);
-  const [students,setStudents]         = useState([]);
-  const [logs,setLogs]                 = useState([]);
-  const [evolutions,setEvolutions]     = useState([]);
-  const [loginCpf,setLoginCpf]         = useState('');
-  const [loginError,setLoginError]     = useState('');
-  const [loading,setLoading]           = useState(true);
-  const [isLoggingIn,setIsLoggingIn]   = useState(false);
-  const [searchTerm,setSearchTerm]     = useState('');
-  const [newEvolution,setNewEvolution] = useState('');
-  const [editEvoId,setEditEvoId]       = useState(null);
-  const [editEvoText,setEditEvoText]   = useState('');
-  const [isSubmitting,setIsSubmitting] = useState(false);
-  const [alunosSubTab,setAlunosSubTab] = useState('todos');
-  const [dashSubTab,setDashSubTab]     = useState('geral');
-  const [dashDrill,setDashDrill]       = useState(null);
+  const [user,setUser]                   = useState(null);
+  const [fbUser,setFbUser]               = useState(null);
+  const [activeTab,setActiveTab]         = useState('agenda');
+  const [selectedDay,setSelectedDay]     = useState('Segunda');
+  const [activeTurno,setActiveTurno]     = useState('manha');
+  const [schedules,setSchedules]         = useState([]);
+  const [students,setStudents]           = useState([]);
+  const [admins,setAdmins]               = useState([]);  // gerenciados no Firestore
+  const [logs,setLogs]                   = useState([]);
+  const [evolutions,setEvolutions]       = useState([]);
+  const [loginCpf,setLoginCpf]           = useState('');
+  const [loginError,setLoginError]       = useState('');
+  const [loading,setLoading]             = useState(true);
+  const [isLoggingIn,setIsLoggingIn]     = useState(false);
+  const [searchTerm,setSearchTerm]       = useState('');
+  const [newEvolution,setNewEvolution]   = useState('');
+  const [editEvoId,setEditEvoId]         = useState(null);
+  const [editEvoText,setEditEvoText]     = useState('');
+  const [isSubmitting,setIsSubmitting]   = useState(false);
+  const [cpfError,setCpfError]           = useState('');
+  const [alunosSubTab,setAlunosSubTab]   = useState('todos');
+  const [dashSubTab,setDashSubTab]       = useState('geral');
+  const [dashDrill,setDashDrill]         = useState(null);
+  const [showAdminMgmt,setShowAdminMgmt] = useState(false);
+  const [newAdmin,setNewAdmin]           = useState({name:'',cpf:'',turno:''});
 
   // Modal IDs
   const [addStudent,setAddStudent]         = useState(false);
@@ -404,7 +421,21 @@ export default function App() {
     }, console.error);
     const unsubLogs  = onSnapshot(C.logs(),  snap=>setLogs(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).slice(0,80)), console.error);
     const unsubEvol  = onSnapshot(C.evolutions(), snap=>setEvolutions(snap.docs.map(d=>({id:d.id,...d.data()}))), console.error);
-    return ()=>{unsubSched();unsubStud();unsubLogs();unsubEvol();};
+    // Carrega admins do Firestore em tempo real
+    const unsubAdmins = onSnapshot(C.admins(), snap=>{
+      const data = snap.docs.map(d=>({id:d.id,...d.data()}));
+      setAdmins(data);
+      // Seed: se não há nenhum admin salvo e ROOT_ADMIN_CPF está definido, cria o admin raiz
+      if(data.length===0 && ROOT_ADMIN_CPF){
+        addDoc(C.admins(),{
+          cpf: ROOT_ADMIN_CPF,
+          name: import.meta.env.VITE_ROOT_ADMIN_NAME || 'Administrador',
+          role: 'admin', isRoot: true,
+          createdAt: ts()
+        }).catch(console.error);
+      }
+    }, console.error);
+    return ()=>{unsubSched();unsubStud();unsubLogs();unsubEvol();unsubAdmins();};
   },[fbUser,user?.id]);
 
   // ── Expiração automática ─────────────────────────────────────────────────────
@@ -575,8 +606,9 @@ export default function App() {
     setIsLoggingIn(true); setLoginError('');
     setTimeout(()=>{
       const cpf = loginCpf.replace(/\D/g,'');
-      const adm = ADMINS.find(a=>a.cpf===cpf);
-      if(adm){setUser(adm);setActiveTab('agenda');setIsLoggingIn(false);return;}
+      // Verifica admins carregados do Firestore
+      const adm = admins.find(a=>a.cpf===cpf);
+      if(adm){setUser({...adm,role:'admin'});setActiveTab('agenda');setIsLoggingIn(false);return;}
       const stu = students.find(s=>s.cpf===cpf);
       if(stu){setUser({role:'aluno',...stu});setActiveTab('agenda');setIsLoggingIn(false);}
       else{setLoginError('CPF não identificado.');setIsLoggingIn(false);}
@@ -619,6 +651,29 @@ export default function App() {
     if(!confirm(`Excluir "${name}" permanentemente?`)) return;
     await deleteDoc(C.student(id));
     await log(`Excluiu: ${name}`);
+  };
+
+  // ── Gestão de admins ─────────────────────────────────────────────────────────
+  const handleAddAdmin = async e=>{
+    e.preventDefault();
+    const cpfLimpo = newAdmin.cpf.replace(/\D/g,'');
+    if(!validarCPF(cpfLimpo)){alert('CPF inválido.');return;}
+    if(admins.some(a=>a.cpf===cpfLimpo)){alert('Este CPF já é admin.');return;}
+    await addDoc(C.admins(),{
+      name:newAdmin.name, cpf:cpfLimpo,
+      turno:newAdmin.turno, role:'admin',
+      isRoot:false, createdAt:ts()
+    });
+    await log(`Adicionou admin: ${newAdmin.name}`);
+    setNewAdmin({name:'',cpf:'',turno:''});
+  };
+
+  const handleDeleteAdmin = async (adm)=>{
+    if(adm.isRoot){alert('O admin raiz não pode ser excluído pelo aplicativo.');return;}
+    if(adm.cpf===user.cpf){alert('Você não pode excluir a si mesmo.');return;}
+    if(!confirm(`Remover "${adm.name}" do quadro de admins?`)) return;
+    await deleteDoc(C.admin(adm.id));
+    await log(`Removeu admin: ${adm.name}`);
   };
 
   const handleDesmarcar = async (schedId,hour)=>{
@@ -765,6 +820,9 @@ export default function App() {
             <NavItem active={activeTab==='dashboard'} icon={<BarChart3 size={18}/>} label="Dashboard" onClick={()=>setActiveTab('dashboard')}/>
             <NavItem active={activeTab==='alunos'}    icon={<Users size={18}/>}    label="Alunos"    onClick={()=>setActiveTab('alunos')}/>
             <NavItem active={activeTab==='historico'} icon={<History size={18}/>}  label="Logs"      onClick={()=>setActiveTab('historico')}/>
+            <button onClick={()=>setShowAdminMgmt(true)} className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all text-gray-400 hover:text-gray-900 hover:bg-gray-100 whitespace-nowrap">
+              <ShieldCheck size={18}/><span className="text-[8px] lg:text-[10px] uppercase font-black">Admins</span>
+            </button>
           </>}
         </div>
         <button onClick={()=>{setUser(null);setLoginCpf('');setLoginError('');}}
@@ -1355,6 +1413,96 @@ export default function App() {
             </div>
             <button type="submit" className="w-full bg-emerald-500 text-black font-black py-4 rounded-2xl uppercase text-xs flex items-center justify-center gap-2"><Save size={16}/>Salvar</button>
           </form>
+        </Modal>
+      )}
+
+      {/* ── MODAL GESTÃO DE ADMINS ── */}
+      {showAdminMgmt&&isAdmin&&(
+        <Modal title="Gestão de Administradores" onClose={()=>{setShowAdminMgmt(false);setNewAdmin({name:'',cpf:'',turno:''}); }} size="md">
+          {/* Adicionar novo admin */}
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
+            <p className="text-[9px] font-black uppercase text-emerald-600 mb-4 tracking-widest">Adicionar Novo Admin</p>
+            <form onSubmit={handleAddAdmin} className="space-y-3">
+              <InputGroup label="Nome completo *" value={newAdmin.name} onChange={v=>setNewAdmin({...newAdmin,name:v})} required/>
+              {/* CPF com validação */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">CPF * <span className="text-[8px] normal-case font-normal">(apenas números)</span></label>
+                <div className="relative">
+                  <input type="text" maxLength={14} placeholder="000.000.000-00"
+                    className={`w-full bg-white border rounded-2xl p-4 text-sm text-gray-900 outline-none transition-all shadow-sm font-mono ${
+                      newAdmin.cpf.replace(/\D/g,'').length===11
+                        ? validarCPF(newAdmin.cpf.replace(/\D/g,'')) ? 'border-emerald-400' : 'border-rose-400'
+                        : 'border-gray-200 focus:border-emerald-400'
+                    }`}
+                    value={newAdmin.cpf}
+                    onChange={e=>{
+                      const digits=e.target.value.replace(/\D/g,'').slice(0,11);
+                      let fmt=digits;
+                      if(digits.length>9)      fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6,9)}-${digits.slice(9)}`;
+                      else if(digits.length>6) fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6)}`;
+                      else if(digits.length>3) fmt=`${digits.slice(0,3)}.${digits.slice(3)}`;
+                      setNewAdmin({...newAdmin,cpf:fmt});
+                    }} required/>
+                  {newAdmin.cpf.replace(/\D/g,'').length===11&&(
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      {validarCPF(newAdmin.cpf.replace(/\D/g,''))
+                        ?<CheckCircle2 size={16} className="text-emerald-500"/>
+                        :<AlertCircle  size={16} className="text-rose-500"/>}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Turno (opcional — para fisioterapeutas) */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Turno (opcional)</label>
+                <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 shadow-sm" value={newAdmin.turno} onChange={e=>setNewAdmin({...newAdmin,turno:e.target.value})}>
+                  <option value="">Sem turno definido</option>
+                  <option value="manha">Manhã</option>
+                  <option value="tarde">Tarde</option>
+                  <option value="ambos">Ambos</option>
+                </select>
+              </div>
+              <button type="submit" className="w-full bg-emerald-500 text-black font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all flex items-center justify-center gap-2">
+                <Plus size={14}/>Adicionar Admin
+              </button>
+            </form>
+          </div>
+
+          {/* Lista de admins atuais */}
+          <p className="text-[9px] font-black uppercase text-gray-500 mb-3 tracking-widest">Admins Cadastrados ({admins.length})</p>
+          <div className="space-y-2">
+            {admins.sort((a,b)=>(b.isRoot?1:0)-(a.isRoot?1:0)).map(adm=>(
+              <div key={adm.id} className={`bg-white border rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm ${adm.isRoot?'border-emerald-300':'border-gray-200'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${adm.isRoot?'bg-emerald-500 text-black':'bg-gray-100 text-gray-600'}`}>
+                    {adm.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-black text-gray-900 uppercase">{adm.name}</p>
+                      {adm.isRoot&&<span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">Raiz</span>}
+                      {adm.turno&&<span className="text-[8px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase">{adm.turno}</span>}
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{adm.cpf}</p>
+                  </div>
+                </div>
+                {/* Só pode excluir se não for raiz e não for ele mesmo */}
+                {!adm.isRoot&&adm.cpf!==user.cpf
+                  ?<button onClick={()=>handleDeleteAdmin(adm)} className="p-2 bg-gray-100 text-gray-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all border border-gray-200" title="Remover admin"><Trash2 size={14}/></button>
+                  :<div className="w-8 h-8 flex items-center justify-center text-gray-300"><Lock size={14}/></div>
+                }
+              </div>
+            ))}
+            {admins.length===0&&<p className="text-center text-gray-400 text-[10px] font-black uppercase py-6">Nenhum admin cadastrado</p>}
+          </div>
+
+          {/* Aviso de segurança */}
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+            <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5"/>
+            <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
+              O admin raiz não pode ser excluído pelo aplicativo. Admins não podem excluir a si mesmos. Todas as alterações ficam registradas no log de auditoria.
+            </p>
+          </div>
         </Modal>
       )}
     </div>
