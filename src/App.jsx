@@ -364,6 +364,8 @@ export default function App() {
   const [schedules,setSchedules]         = useState([]);
   const [students,setStudents]           = useState([]);
   const [admins,setAdmins]               = useState([]);  // gerenciados no Firestore
+  const [profManha,setProfManha]         = useState(PROF_MANHA); // fisioterapeuta manhã dinâmica
+  const [profTarde,setProfTarde]         = useState(PROF_TARDE); // fisioterapeuta tarde dinâmica
   const [logs,setLogs]                   = useState([]);
   const [evolutions,setEvolutions]       = useState([]);
   const [loginCpf,setLoginCpf]           = useState('');
@@ -380,7 +382,7 @@ export default function App() {
   const [dashSubTab,setDashSubTab]       = useState('geral');
   const [dashDrill,setDashDrill]         = useState(null);
   const [showAdminMgmt,setShowAdminMgmt] = useState(false);
-  const [newAdmin,setNewAdmin]           = useState({name:'',cpf:'',turno:''});
+  const [newAdmin,setNewAdmin]           = useState({name:'',cpf:'',phone:'',turno:''});
 
   // Modal IDs
   const [addStudent,setAddStudent]         = useState(false);
@@ -425,6 +427,11 @@ export default function App() {
     const unsubAdmins = onSnapshot(C.admins(), snap=>{
       const data = snap.docs.map(d=>({id:d.id,...d.data()}));
       setAdmins(data);
+      // Atualiza profissionais dinamicamente conforme admins com turno definido
+      const m = data.find(a=>a.turno==='manha');
+      const t = data.find(a=>a.turno==='tarde');
+      if(m) setProfManha(m.name); else setProfManha(PROF_MANHA);
+      if(t) setProfTarde(t.name); else setProfTarde(PROF_TARDE);
       // Seed: se não há nenhum admin salvo e ROOT_ADMIN_CPF está definido, cria o admin raiz
       if(data.length===0 && ROOT_ADMIN_CPF){
         addDoc(C.admins(),{
@@ -659,21 +666,33 @@ export default function App() {
     const cpfLimpo = newAdmin.cpf.replace(/\D/g,'');
     if(!validarCPF(cpfLimpo)){alert('CPF inválido.');return;}
     if(admins.some(a=>a.cpf===cpfLimpo)){alert('Este CPF já é admin.');return;}
+    // Se o turno já tem alguém, avisa
+    if(newAdmin.turno&&admins.some(a=>a.turno===newAdmin.turno)){
+      if(!confirm(`Já existe um fisioterapeuta no turno da ${newAdmin.turno==='manha'?'Manhã':'Tarde'}. Substituir?`)) return;
+      // Remove turno do admin anterior
+      const anterior = admins.find(a=>a.turno===newAdmin.turno);
+      if(anterior) await updateDoc(C.admin(anterior.id),{turno:''}).catch(console.error);
+    }
     await addDoc(C.admins(),{
       name:newAdmin.name, cpf:cpfLimpo,
-      turno:newAdmin.turno, role:'admin',
-      isRoot:false, createdAt:ts()
+      phone:newAdmin.phone||'', turno:newAdmin.turno,
+      role:'admin', isRoot:false, createdAt:ts()
     });
-    await log(`Adicionou admin: ${newAdmin.name}`);
-    setNewAdmin({name:'',cpf:'',turno:''});
+    await log(`Adicionou admin/fisioterapeuta: ${newAdmin.name} (turno: ${newAdmin.turno||'sem turno'})`);
+    setNewAdmin({name:'',cpf:'',phone:'',turno:''});
   };
 
   const handleDeleteAdmin = async (adm)=>{
     if(adm.isRoot){alert('O admin raiz não pode ser excluído pelo aplicativo.');return;}
     if(adm.cpf===user.cpf){alert('Você não pode excluir a si mesmo.');return;}
-    if(!confirm(`Remover "${adm.name}" do quadro de admins?`)) return;
+    if(!confirm(`Remover "${adm.name}" do quadro?\n\nO nome será removido da agenda e do dashboard.`)) return;
+    // Remove do Firestore de admins
     await deleteDoc(C.admin(adm.id));
-    await log(`Removeu admin: ${adm.name}`);
+    // Se tinha turno, limpa o nome do profissional nos schedules da semana atual
+    // (os agendamentos dos alunos ficam intactos — apenas o nome do prof. muda)
+    if(adm.turno==='manha') setProfManha(PROF_MANHA);
+    if(adm.turno==='tarde') setProfTarde(PROF_TARDE);
+    await log(`🔴 Removeu fisioterapeuta: ${adm.name} — turno ${adm.turno||'sem turno'} agora vago.`);
   };
 
   const handleDesmarcar = async (schedId,hour)=>{
@@ -892,7 +911,9 @@ export default function App() {
             {activeTurno!=='semana'&&(
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase w-fit mb-4 ${activeTurno==='manha'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>
                 {activeTurno==='manha'?<Sun size={12}/>:<Moon size={12}/>}
-                {activeTurno==='manha'?`Manhã — Fisioterapeuta: ${PROF_MANHA}`:`Tarde — Fisioterapeuta: ${PROF_TARDE}`}
+                {activeTurno==='manha'
+                  ?`Manhã — Fisioterapeuta: ${profManha}`
+                  :`Tarde — Fisioterapeuta: ${profTarde}`}
               </div>
             )}
 
@@ -1108,8 +1129,8 @@ export default function App() {
                 </div>
               );
             })()}
-            {dashSubTab==='andriele'&&<ProfDashboard name={PROF_MANHA} turno="Manhã" turnoColor="amber" data={metricsByProf.andriele} onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
-            {dashSubTab==='jessica' &&<ProfDashboard name={PROF_TARDE} turno="Tarde" turnoColor="blue"  data={metricsByProf.jessica}  onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
+            {dashSubTab==='andriele'&&<ProfDashboard name={profManha} turno="Manhã" turnoColor="amber" data={metricsByProf.andriele} onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
+            {dashSubTab==='jessica' &&<ProfDashboard name={profTarde} turno="Tarde" turnoColor="blue"  data={metricsByProf.jessica}  onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
           </div>
         )}
 
