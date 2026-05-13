@@ -622,8 +622,6 @@ export default function App() {
     },800);
   };
 
-  const [cpfError,setCpfError] = useState('');
-
   const handleAddStudent = async e=>{
     e.preventDefault(); if(isSubmitting||!fbUser) return;
     // Valida CPF antes de salvar
