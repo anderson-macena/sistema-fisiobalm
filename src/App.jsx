@@ -383,6 +383,7 @@ export default function App() {
   const [dashDrill,setDashDrill]         = useState(null);
   const [showAdminMgmt,setShowAdminMgmt] = useState(false);
   const [newAdmin,setNewAdmin]           = useState({name:'',cpf:'',phone:'',turno:''});
+  const [editAdmin,setEditAdmin]         = useState(null); // admin sendo editado
 
   // Modal IDs
   const [addStudent,setAddStudent]         = useState(false);
@@ -684,13 +685,28 @@ export default function App() {
     if(adm.isRoot){alert('O admin raiz não pode ser excluído pelo aplicativo.');return;}
     if(adm.cpf===user.cpf){alert('Você não pode excluir a si mesmo.');return;}
     if(!confirm(`Remover "${adm.name}" do quadro?\n\nO nome será removido da agenda e do dashboard.`)) return;
-    // Remove do Firestore de admins
     await deleteDoc(C.admin(adm.id));
-    // Se tinha turno, limpa o nome do profissional nos schedules da semana atual
-    // (os agendamentos dos alunos ficam intactos — apenas o nome do prof. muda)
     if(adm.turno==='manha') setProfManha(PROF_MANHA);
     if(adm.turno==='tarde') setProfTarde(PROF_TARDE);
     await log(`🔴 Removeu fisioterapeuta: ${adm.name} — turno ${adm.turno||'sem turno'} agora vago.`);
+  };
+
+  // ── Editar admin (turno + telefone) ─────────────────────────────────────────
+  const handleEditAdmin = async e=>{
+    e.preventDefault();
+    if(!editAdmin) return;
+    const {id, _originalTurno, ...rest} = editAdmin;
+    // Se mudou de turno, libera o turno do ocupante anterior
+    if(editAdmin.turno && editAdmin.turno !== _originalTurno){
+      const ocupante = admins.find(a=>a.id!==id && a.turno===editAdmin.turno);
+      if(ocupante){
+        if(!confirm(`${ocupante.name} já está no turno da ${editAdmin.turno==='manha'?'Manhã':'Tarde'}. Substituir?`)) return;
+        await updateDoc(C.admin(ocupante.id),{turno:''}).catch(console.error);
+      }
+    }
+    await updateDoc(C.admin(id),{name:editAdmin.name, phone:editAdmin.phone||'', turno:editAdmin.turno||''});
+    await log(`Editou admin: ${editAdmin.name} — turno: ${editAdmin.turno||'sem turno'}`);
+    setEditAdmin(null);
   };
 
   const handleDesmarcar = async (schedId,hour)=>{
@@ -837,9 +853,6 @@ export default function App() {
             <NavItem active={activeTab==='dashboard'} icon={<BarChart3 size={18}/>} label="Dashboard" onClick={()=>setActiveTab('dashboard')}/>
             <NavItem active={activeTab==='alunos'}    icon={<Users size={18}/>}    label="Alunos"    onClick={()=>setActiveTab('alunos')}/>
             <NavItem active={activeTab==='historico'} icon={<History size={18}/>}  label="Logs"      onClick={()=>setActiveTab('historico')}/>
-            <button onClick={()=>setShowAdminMgmt(true)} className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all text-gray-400 hover:text-gray-900 hover:bg-gray-100 whitespace-nowrap">
-              <ShieldCheck size={18}/><span className="text-[8px] lg:text-[10px] uppercase font-black">Admins</span>
-            </button>
           </>}
         </div>
         <button onClick={()=>{setUser(null);setLoginCpf('');setLoginError('');}}
@@ -1146,44 +1159,62 @@ export default function App() {
                   </form>
                 </div>
 
-                {/* Lista de admins */}
+                {/* Lista de admins — 2: sem CPF | 3: sem raiz | 4: botão editar */}
                 <div className="space-y-3">
-                  <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Quadro atual ({admins.length})</p>
-                  {admins.sort((a,b)=>(b.isRoot?1:0)-(a.isRoot?1:0)||a.name.localeCompare(b.name)).map(adm=>(
-                    <div key={adm.id} className={`bg-white rounded-2xl border p-4 shadow-sm flex items-center gap-4 ${adm.isRoot?'border-emerald-200':adm.turno==='manha'?'border-amber-200':adm.turno==='tarde'?'border-blue-200':'border-gray-200'}`}>
-                      {/* Avatar com cor do turno */}
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-base shrink-0 ${
-                        adm.turno==='manha'?'bg-amber-100 text-amber-700':adm.turno==='tarde'?'bg-blue-100 text-blue-700':adm.isRoot?'bg-emerald-500 text-black':'bg-gray-100 text-gray-600'
-                      }`}>{adm.name.charAt(0)}</div>
-                      {/* Dados */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-black text-gray-900 uppercase truncate">{adm.name}</p>
-                          {adm.isRoot&&<span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">Raiz</span>}
-                          {adm.turno==='manha'&&<span className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">☀️ Manhã</span>}
-                          {adm.turno==='tarde'&&<span className="text-[8px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">🌙 Tarde</span>}
+                  <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">
+                    Quadro atual ({admins.filter(a=>!a.isRoot).length})
+                  </p>
+                  {admins
+                    .filter(a=>!a.isRoot) // Fix 3: oculta admin raiz
+                    .sort((a,b)=>a.name.localeCompare(b.name))
+                    .map(adm=>(
+                    <div key={adm.id} className={`bg-white rounded-2xl border p-4 shadow-sm ${adm.turno==='manha'?'border-amber-200':adm.turno==='tarde'?'border-blue-200':'border-gray-200'}`}>
+                      <div className="flex items-center gap-3">
+                        {/* Avatar */}
+                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-base shrink-0 ${
+                          adm.turno==='manha'?'bg-amber-100 text-amber-700':adm.turno==='tarde'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-600'
+                        }`}>{adm.name.charAt(0)}</div>
+                        {/* Dados — Fix 2: sem CPF */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-black text-gray-900 uppercase truncate">{adm.name}</p>
+                            {adm.turno==='manha'&&<span className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">☀️ Manhã</span>}
+                            {adm.turno==='tarde'&&<span className="text-[8px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">🌙 Tarde</span>}
+                            {!adm.turno&&<span className="text-[8px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-black uppercase shrink-0">Sem turno</span>}
+                          </div>
+                          {/* Mostra telefone mas NÃO o CPF */}
+                          {adm.phone&&<p className="text-[9px] text-gray-400 mt-0.5">{adm.phone}</p>}
                         </div>
-                        <p className="text-[9px] text-gray-400 font-mono mt-0.5 truncate">{adm.cpf}{adm.phone?` · ${adm.phone}`:''}</p>
+                        {/* Fix 4: botões editar + excluir */}
+                        <div className="flex gap-2 shrink-0">
+                          {/* Editar — disponível para todos exceto si mesmo */}
+                          {adm.cpf!==user.cpf&&(
+                            <button
+                              onClick={()=>setEditAdmin({...adm, _originalTurno:adm.turno})}
+                              className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-emerald-100 hover:text-emerald-700 transition-all border border-gray-200"
+                              title="Editar fisioterapeuta"><Edit3 size={14}/></button>
+                          )}
+                          {/* Excluir */}
+                          {adm.cpf!==user.cpf
+                            ?<button onClick={()=>handleDeleteAdmin(adm)}
+                                className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all border border-gray-200"
+                                title="Remover do quadro"><Trash2 size={14}/></button>
+                            :<div className="w-9 h-9 flex items-center justify-center text-gray-300" title="Você não pode se remover"><Lock size={14}/></div>
+                          }
+                        </div>
                       </div>
-                      {/* Botão excluir — bloqueado para raiz e para si mesmo */}
-                      {!adm.isRoot&&adm.cpf!==user.cpf
-                        ?<button onClick={()=>handleDeleteAdmin(adm)}
-                            className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all border border-gray-200 shrink-0"
-                            title="Remover do quadro"><Trash2 size={14}/></button>
-                        :<div className="w-9 h-9 flex items-center justify-center text-gray-300 shrink-0" title={adm.isRoot?'Admin raiz — não pode ser removido':'Você não pode se remover'}><Lock size={14}/></div>
-                      }
                     </div>
                   ))}
-                  {admins.length===0&&(
+                  {admins.filter(a=>!a.isRoot).length===0&&(
                     <div className="text-center py-12 text-gray-400">
                       <Users size={28} className="mx-auto mb-2 opacity-30"/>
-                      <p className="text-[10px] font-black uppercase">Nenhum admin cadastrado</p>
+                      <p className="text-[10px] font-black uppercase">Nenhum fisioterapeuta cadastrado</p>
                     </div>
                   )}
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 mt-2">
                     <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5"/>
                     <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
-                      Ao excluir um fisioterapeuta, o turno fica vago até novo cadastro. O histórico de atendimentos é preservado nos logs.
+                      Ao excluir um fisioterapeuta, o turno fica vago até novo cadastro. O histórico é preservado nos logs.
                     </p>
                   </div>
                 </div>
