@@ -1037,26 +1037,163 @@ export default function App() {
         {/* ── ALUNOS ── */}
         {activeTab==='alunos'&&isAdmin&&(
           <div>
+            {/* Cabeçalho dinâmico */}
             <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-              <h1 className="text-2xl lg:text-3xl font-black uppercase italic text-gray-900">Alunos</h1>
+              <h1 className="text-2xl lg:text-3xl font-black uppercase italic text-gray-900">
+                {alunosSubTab==='admins'?'Fisioterapeutas & Admins':'Alunos'}
+              </h1>
               <div className="flex gap-3 flex-wrap">
-                <input type="text" placeholder="Buscar..." className="bg-white border border-gray-200 rounded-2xl px-5 py-3 text-xs w-48 outline-none text-gray-900 shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/>
-                <button onClick={()=>setAddStudent(true)} className="bg-emerald-500 text-black px-5 py-3 rounded-2xl font-black text-[10px] uppercase flex items-center gap-2 shadow-sm"><UserPlus size={16}/>Matricular</button>
+                {alunosSubTab!=='admins'&&<>
+                  <input type="text" placeholder="Buscar..." className="bg-white border border-gray-200 rounded-2xl px-5 py-3 text-xs w-48 outline-none text-gray-900 shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/>
+                  <button onClick={()=>setAddStudent(true)} className="bg-emerald-500 text-black px-5 py-3 rounded-2xl font-black text-[10px] uppercase flex items-center gap-2 shadow-sm"><UserPlus size={16}/>Matricular</button>
+                </>}
               </div>
             </div>
-            {/* Sub-abas */}
-            <div className="flex gap-2 mb-6 flex-wrap">
-              {[['todos','Todos',`(${students.length})`,'bg-gray-900 text-white'],
-                ['planoAoFim','Plano ao Fim',`(${alunosPlanoFim.length})`,'bg-rose-500 text-white'],
-                ['expirados','Expirados',`(${alunosExpirados.length})`,'bg-red-600 text-white'],
-              ].map(([k,label,count,active])=>(
-                <button key={k} onClick={()=>setAlunosSubTab(k)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab===k?active:'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
-                  {k==='planoAoFim'&&<AlertTriangle size={12}/>}{k==='expirados'&&<AlertCircle size={12}/>}{label} {count}
-                </button>
-              ))}
-            </div>
-            {/* Cards */}
+
+            {/* Sub-abas — Admins visível só para as proprietárias */}
             {(()=>{
+              const PROPRIETARIAS = ['12582241601','68930925120']; // Jessica e Mariana
+              const isProprietaria = PROPRIETARIAS.includes(user.cpf);
+              return (
+                <div className="flex gap-2 mb-6 flex-wrap">
+                  <button onClick={()=>setAlunosSubTab('todos')}
+                    className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='todos'?'bg-gray-900 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                    Todos ({students.length})
+                  </button>
+                  <button onClick={()=>setAlunosSubTab('planoAoFim')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='planoAoFim'?'bg-rose-500 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                    <AlertTriangle size={12}/>Plano ao Fim ({alunosPlanoFim.length})
+                  </button>
+                  <button onClick={()=>setAlunosSubTab('expirados')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='expirados'?'bg-red-600 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                    <AlertCircle size={12}/>Expirados ({alunosExpirados.length})
+                  </button>
+                  {isProprietaria&&(
+                    <button onClick={()=>setAlunosSubTab('admins')}
+                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='admins'?'bg-emerald-600 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                      <ShieldCheck size={12}/>Admins ({admins.length})
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── ABA ADMINS ── */}
+            {alunosSubTab==='admins'&&(
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Formulário de cadastro */}
+                <div className="bg-white border border-gray-200 rounded-[2rem] p-6 shadow-sm">
+                  <p className="text-[10px] font-black uppercase text-emerald-600 mb-5 tracking-widest flex items-center gap-2"><Plus size={12}/>Cadastrar Fisioterapeuta / Admin</p>
+                  <form onSubmit={handleAddAdmin} className="space-y-4">
+                    <InputGroup label="Nome completo *" value={newAdmin.name} onChange={v=>setNewAdmin({...newAdmin,name:v})} required/>
+                    {/* CPF com validação */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-gray-500 ml-1">CPF * <span className="text-[8px] normal-case font-normal">(apenas números)</span></label>
+                      <div className="relative">
+                        <input type="text" maxLength={14} placeholder="000.000.000-00"
+                          className={`w-full bg-white border rounded-2xl p-4 text-sm text-gray-900 outline-none transition-all shadow-sm font-mono ${
+                            newAdmin.cpf.replace(/\D/g,'').length===11
+                              ? validarCPF(newAdmin.cpf.replace(/\D/g,'')) ? 'border-emerald-400' : 'border-rose-400'
+                              : 'border-gray-200 focus:border-emerald-400'
+                          }`}
+                          value={newAdmin.cpf}
+                          onChange={e=>{
+                            const digits=e.target.value.replace(/\D/g,'').slice(0,11);
+                            let fmt=digits;
+                            if(digits.length>9)      fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6,9)}-${digits.slice(9)}`;
+                            else if(digits.length>6) fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6)}`;
+                            else if(digits.length>3) fmt=`${digits.slice(0,3)}.${digits.slice(3)}`;
+                            setNewAdmin({...newAdmin,cpf:fmt});
+                          }} required/>
+                        {newAdmin.cpf.replace(/\D/g,'').length===11&&(
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            {validarCPF(newAdmin.cpf.replace(/\D/g,''))
+                              ?<CheckCircle2 size={16} className="text-emerald-500"/>
+                              :<AlertCircle  size={16} className="text-rose-500"/>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <InputGroup label="Telefone / WhatsApp" value={newAdmin.phone||''} onChange={v=>setNewAdmin({...newAdmin,phone:v})}/>
+                    {/* Seleção de turno */}
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Turno de atendimento</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[['','Sem turno'],['manha','☀️ Manhã'],['tarde','🌙 Tarde']].map(([v,l])=>(
+                          <button type="button" key={v} onClick={()=>setNewAdmin({...newAdmin,turno:v})}
+                            className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all border ${
+                              newAdmin.turno===v
+                                ?v==='manha'?'bg-amber-500 text-black border-amber-500':v==='tarde'?'bg-blue-500 text-white border-blue-500':'bg-gray-900 text-white border-gray-900'
+                                :'bg-white text-gray-500 border-gray-200'
+                            }`}>{l}</button>
+                        ))}
+                      </div>
+                      {/* Aviso se turno já tem responsável */}
+                      {newAdmin.turno&&admins.some(a=>a.turno===newAdmin.turno)&&(()=>{
+                        const atual=admins.find(a=>a.turno===newAdmin.turno);
+                        return(
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-2">
+                            <AlertTriangle size={11} className="text-amber-600 shrink-0"/>
+                            <p className="text-[9px] text-amber-700 font-bold">
+                              {atual?.name} está neste turno. Ao confirmar, {atual?.name} perderá o turno.
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <button type="submit" className="w-full bg-emerald-500 text-black font-black py-3.5 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all flex items-center justify-center gap-2 shadow-sm">
+                      <UserPlus size={14}/>Cadastrar
+                    </button>
+                  </form>
+                </div>
+
+                {/* Lista de admins */}
+                <div className="space-y-3">
+                  <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Quadro atual ({admins.length})</p>
+                  {admins.sort((a,b)=>(b.isRoot?1:0)-(a.isRoot?1:0)||a.name.localeCompare(b.name)).map(adm=>(
+                    <div key={adm.id} className={`bg-white rounded-2xl border p-4 shadow-sm flex items-center gap-4 ${adm.isRoot?'border-emerald-200':adm.turno==='manha'?'border-amber-200':adm.turno==='tarde'?'border-blue-200':'border-gray-200'}`}>
+                      {/* Avatar com cor do turno */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-base shrink-0 ${
+                        adm.turno==='manha'?'bg-amber-100 text-amber-700':adm.turno==='tarde'?'bg-blue-100 text-blue-700':adm.isRoot?'bg-emerald-500 text-black':'bg-gray-100 text-gray-600'
+                      }`}>{adm.name.charAt(0)}</div>
+                      {/* Dados */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-black text-gray-900 uppercase truncate">{adm.name}</p>
+                          {adm.isRoot&&<span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">Raiz</span>}
+                          {adm.turno==='manha'&&<span className="text-[8px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">☀️ Manhã</span>}
+                          {adm.turno==='tarde'&&<span className="text-[8px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase shrink-0">🌙 Tarde</span>}
+                        </div>
+                        <p className="text-[9px] text-gray-400 font-mono mt-0.5 truncate">{adm.cpf}{adm.phone?` · ${adm.phone}`:''}</p>
+                      </div>
+                      {/* Botão excluir — bloqueado para raiz e para si mesmo */}
+                      {!adm.isRoot&&adm.cpf!==user.cpf
+                        ?<button onClick={()=>handleDeleteAdmin(adm)}
+                            className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all border border-gray-200 shrink-0"
+                            title="Remover do quadro"><Trash2 size={14}/></button>
+                        :<div className="w-9 h-9 flex items-center justify-center text-gray-300 shrink-0" title={adm.isRoot?'Admin raiz — não pode ser removido':'Você não pode se remover'}><Lock size={14}/></div>
+                      }
+                    </div>
+                  ))}
+                  {admins.length===0&&(
+                    <div className="text-center py-12 text-gray-400">
+                      <Users size={28} className="mx-auto mb-2 opacity-30"/>
+                      <p className="text-[10px] font-black uppercase">Nenhum admin cadastrado</p>
+                    </div>
+                  )}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 mt-2">
+                    <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5"/>
+                    <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
+                      Ao excluir um fisioterapeuta, o turno fica vago até novo cadastro. O histórico de atendimentos é preservado nos logs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── CARDS DE ALUNOS (todos / plano ao fim / expirados) ── */}
+            {alunosSubTab!=='admins'&&(()=>{
               const src=alunosSubTab==='planoAoFim'?alunosPlanoFim:alunosSubTab==='expirados'?alunosExpirados:students;
               const lista=src.filter(s=>s.name.toLowerCase().includes(searchTerm.toLowerCase()));
               return(
