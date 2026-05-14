@@ -156,29 +156,29 @@ const getNextWeekMonday = () => {
 // ─── COMPONENTES ATÔMICOS ────────────────────────────────────────────────────
 const NavItem = ({active,icon,label,onClick}) => (
   <button onClick={onClick} className={`flex flex-col lg:flex-row items-center gap-1 lg:gap-3 px-3 lg:px-6 py-2 lg:py-4 rounded-2xl transition-all whitespace-nowrap ${active?'bg-emerald-500 text-black font-black shadow-sm':'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
-    {icon}<span className="text-[8px] lg:text-[10px] uppercase font-black">{label}</span>
+    {icon}<span className="text-[10px] lg:text-xs uppercase font-black">{label}</span>
   </button>
 );
 
 const StatCard = ({label,value,color,icon,onClick}) => (
   <div onClick={onClick} className={`bg-white p-6 lg:p-8 rounded-[2.5rem] border border-gray-200 shadow-sm relative overflow-hidden group transition-all ${onClick?'cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95':''}`}>
     <div className="absolute top-4 right-4 text-gray-100 group-hover:text-gray-200 transition-all">{icon}</div>
-    <p className="text-[9px] font-black uppercase text-gray-400 mb-3">{label}</p>
+    <p className="text-xs font-black uppercase text-gray-500 mb-3">{label}</p>
     <p className={`text-4xl lg:text-5xl font-black ${color} tracking-tighter`}>{value}</p>
-    {onClick && <p className="text-[8px] text-gray-300 font-black uppercase mt-2">Clique para ver detalhes</p>}
+    {onClick && <p className="text-[10px] text-gray-400 font-bold uppercase mt-2">Ver detalhes</p>}
   </div>
 );
 
 const StatMetric = ({label,value,color,highlight}) => (
   <div className={`text-center px-3 py-2 rounded-2xl ${highlight?'bg-gray-100':''}`}>
-    <p className="text-[8px] font-black text-gray-400 uppercase mb-1">{label}</p>
-    <p className={`text-base font-black ${color}`}>{value}</p>
+    <p className="text-[11px] font-black text-gray-500 uppercase mb-1">{label}</p>
+    <p className={`text-lg font-black ${color}`}>{value}</p>
   </div>
 );
 
 const InputGroup = ({label,type='text',value,onChange,required=false}) => (
   <div className="space-y-1">
-    <label className="text-[9px] font-black uppercase text-gray-500 ml-1">{label}</label>
+    <label className="text-xs font-black uppercase text-gray-600 ml-1">{label}</label>
     <input type={type} className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 outline-none focus:border-emerald-400 transition-all shadow-sm" value={value||''} onChange={e=>onChange(e.target.value)} required={required}/>
   </div>
 );
@@ -1061,28 +1061,28 @@ export default function App() {
               </div>
             </div>
 
-            {/* Sub-abas — Admins visível só para as proprietárias */}
+            {/* Sub-abas — Admins visível para proprietárias e admin raiz */}
             {(()=>{
               const PROPRIETARIAS = ['12582241601','68930925120']; // Jessica e Mariana
-              const isProprietaria = PROPRIETARIAS.includes(user.cpf);
+              const isProprietaria = PROPRIETARIAS.includes(user.cpf) || user.isRoot;
               return (
                 <div className="flex gap-2 mb-6 flex-wrap">
                   <button onClick={()=>setAlunosSubTab('todos')}
-                    className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='todos'?'bg-gray-900 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
+                    className={`px-5 py-3 rounded-xl font-black text-xs uppercase transition-all ${alunosSubTab==='todos'?'bg-gray-900 text-white':'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
                     Todos ({students.length})
                   </button>
                   <button onClick={()=>setAlunosSubTab('planoAoFim')}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='planoAoFim'?'bg-rose-500 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
-                    <AlertTriangle size={12}/>Plano ao Fim ({alunosPlanoFim.length})
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase transition-all ${alunosSubTab==='planoAoFim'?'bg-rose-500 text-white':'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
+                    <AlertTriangle size={13}/>Plano ao Fim ({alunosPlanoFim.length})
                   </button>
                   <button onClick={()=>setAlunosSubTab('expirados')}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='expirados'?'bg-red-600 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
-                    <AlertCircle size={12}/>Expirados ({alunosExpirados.length})
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase transition-all ${alunosSubTab==='expirados'?'bg-red-600 text-white':'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
+                    <AlertCircle size={13}/>Expirados ({alunosExpirados.length})
                   </button>
                   {isProprietaria&&(
                     <button onClick={()=>setAlunosSubTab('admins')}
-                      className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase transition-all ${alunosSubTab==='admins'?'bg-emerald-600 text-white':'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>
-                      <ShieldCheck size={12}/>Admins ({admins.length})
+                      className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black text-xs uppercase transition-all ${alunosSubTab==='admins'?'bg-emerald-600 text-white':'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
+                      <ShieldCheck size={13}/>Admins ({admins.filter(a=>!a.isRoot).length})
                     </button>
                   )}
                 </div>
