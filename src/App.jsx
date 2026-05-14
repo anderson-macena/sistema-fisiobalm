@@ -1603,8 +1603,86 @@ export default function App() {
         </Modal>
       )}
 
-      {/* ── MODAL GESTÃO DE ADMINS ── */}
-      {showAdminMgmt&&isAdmin&&(
+      {/* ── MODAL EDITAR ADMIN ── */}
+      {editAdmin&&(
+        <Modal title={`Editar — ${editAdmin.name}`} onClose={()=>setEditAdmin(null)} size="sm">
+          <form onSubmit={handleEditAdmin} className="space-y-5">
+
+            {/* Telefone */}
+            <div className="space-y-1">
+              <label className="text-xs font-black uppercase text-gray-600 ml-1">Telefone / WhatsApp</label>
+              <input
+                type="text"
+                placeholder="(00) 00000-0000"
+                className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 outline-none focus:border-emerald-400 transition-all shadow-sm"
+                value={editAdmin.phone||''}
+                onChange={e=>setEditAdmin({...editAdmin, phone:e.target.value})}
+              />
+            </div>
+
+            {/* Turno */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-gray-600 ml-1">Turno de atendimento</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[['','Sem turno'],['manha','☀️ Manhã'],['tarde','🌙 Tarde']].map(([v,l])=>(
+                  <button
+                    type="button" key={v}
+                    onClick={()=>setEditAdmin({...editAdmin, turno:v})}
+                    className={`py-4 rounded-2xl font-black text-xs uppercase transition-all border ${
+                      editAdmin.turno===v
+                        ? v==='manha' ? 'bg-amber-500 text-black border-amber-500'
+                          : v==='tarde' ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >{l}</button>
+                ))}
+              </div>
+
+              {/* Aviso se turno já tem responsável */}
+              {editAdmin.turno && editAdmin.turno !== editAdmin._originalTurno &&
+               admins.some(a=>a.id!==editAdmin.id && a.turno===editAdmin.turno) && (()=>{
+                const atual = admins.find(a=>a.id!==editAdmin.id && a.turno===editAdmin.turno);
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={13} className="text-amber-600 shrink-0 mt-0.5"/>
+                    <p className="text-xs text-amber-700 font-bold leading-relaxed">
+                      <strong>{atual?.name}</strong> está neste turno. Ao salvar, ela perderá o turno e ficará "Sem turno".
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* Badge atual vs novo */}
+              {editAdmin.turno !== editAdmin._originalTurno && (
+                <div className="flex items-center gap-3 px-1">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase">Antes:</span>
+                  <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase ${editAdmin._originalTurno==='manha'?'bg-amber-100 text-amber-700':editAdmin._originalTurno==='tarde'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-500'}`}>
+                    {editAdmin._originalTurno==='manha'?'☀️ Manhã':editAdmin._originalTurno==='tarde'?'🌙 Tarde':'Sem turno'}
+                  </span>
+                  <span className="text-gray-300 font-bold">→</span>
+                  <span className={`text-[10px] px-3 py-1 rounded-full font-black uppercase ${editAdmin.turno==='manha'?'bg-amber-100 text-amber-700':editAdmin.turno==='tarde'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-500'}`}>
+                    {editAdmin.turno==='manha'?'☀️ Manhã':editAdmin.turno==='tarde'?'🌙 Tarde':'Sem turno'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={()=>setEditAdmin(null)}
+                className="flex-1 py-4 rounded-2xl font-black text-xs uppercase text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
+              >Cancelar</button>
+              <button
+                type="submit"
+                className="flex-1 py-4 bg-emerald-500 text-black font-black text-xs uppercase rounded-2xl hover:bg-emerald-400 transition-all flex items-center justify-center gap-2 shadow-sm"
+              ><Save size={15}/>Salvar</button>
+            </div>
+          </form>
+        </Modal>
+      )}
         <Modal title="Gestão de Administradores" onClose={()=>{setShowAdminMgmt(false);setNewAdmin({name:'',cpf:'',turno:''}); }} size="md">
           {/* Adicionar novo admin */}
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
