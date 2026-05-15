@@ -381,7 +381,6 @@ export default function App() {
   const [alunosSubTab,setAlunosSubTab]   = useState('todos');
   const [dashSubTab,setDashSubTab]       = useState('geral');
   const [dashDrill,setDashDrill]         = useState(null);
-  const [showAdminMgmt,setShowAdminMgmt] = useState(false);
   const [newAdmin,setNewAdmin]           = useState({name:'',cpf:'',phone:'',turno:''});
   const [editAdmin,setEditAdmin]         = useState(null); // admin sendo editado
 
@@ -1681,93 +1680,6 @@ export default function App() {
               ><Save size={15}/>Salvar</button>
             </div>
           </form>
-        </Modal>
-      )}
-        <Modal title="Gestão de Administradores" onClose={()=>{setShowAdminMgmt(false);setNewAdmin({name:'',cpf:'',turno:''}); }} size="md">
-          {/* Adicionar novo admin */}
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
-            <p className="text-[9px] font-black uppercase text-emerald-600 mb-4 tracking-widest">Adicionar Novo Admin</p>
-            <form onSubmit={handleAddAdmin} className="space-y-3">
-              <InputGroup label="Nome completo *" value={newAdmin.name} onChange={v=>setNewAdmin({...newAdmin,name:v})} required/>
-              {/* CPF com validação */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">CPF * <span className="text-[8px] normal-case font-normal">(apenas números)</span></label>
-                <div className="relative">
-                  <input type="text" maxLength={14} placeholder="000.000.000-00"
-                    className={`w-full bg-white border rounded-2xl p-4 text-sm text-gray-900 outline-none transition-all shadow-sm font-mono ${
-                      newAdmin.cpf.replace(/\D/g,'').length===11
-                        ? validarCPF(newAdmin.cpf.replace(/\D/g,'')) ? 'border-emerald-400' : 'border-rose-400'
-                        : 'border-gray-200 focus:border-emerald-400'
-                    }`}
-                    value={newAdmin.cpf}
-                    onChange={e=>{
-                      const digits=e.target.value.replace(/\D/g,'').slice(0,11);
-                      let fmt=digits;
-                      if(digits.length>9)      fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6,9)}-${digits.slice(9)}`;
-                      else if(digits.length>6) fmt=`${digits.slice(0,3)}.${digits.slice(3,6)}.${digits.slice(6)}`;
-                      else if(digits.length>3) fmt=`${digits.slice(0,3)}.${digits.slice(3)}`;
-                      setNewAdmin({...newAdmin,cpf:fmt});
-                    }} required/>
-                  {newAdmin.cpf.replace(/\D/g,'').length===11&&(
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      {validarCPF(newAdmin.cpf.replace(/\D/g,''))
-                        ?<CheckCircle2 size={16} className="text-emerald-500"/>
-                        :<AlertCircle  size={16} className="text-rose-500"/>}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Turno (opcional — para fisioterapeutas) */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-gray-500 ml-1">Turno (opcional)</label>
-                <select className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-sm text-gray-900 shadow-sm" value={newAdmin.turno} onChange={e=>setNewAdmin({...newAdmin,turno:e.target.value})}>
-                  <option value="">Sem turno definido</option>
-                  <option value="manha">Manhã</option>
-                  <option value="tarde">Tarde</option>
-                  <option value="ambos">Ambos</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full bg-emerald-500 text-black font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-emerald-400 transition-all flex items-center justify-center gap-2">
-                <Plus size={14}/>Adicionar Admin
-              </button>
-            </form>
-          </div>
-
-          {/* Lista de admins atuais */}
-          <p className="text-[9px] font-black uppercase text-gray-500 mb-3 tracking-widest">Admins Cadastrados ({admins.length})</p>
-          <div className="space-y-2">
-            {admins.sort((a,b)=>(b.isRoot?1:0)-(a.isRoot?1:0)).map(adm=>(
-              <div key={adm.id} className={`bg-white border rounded-2xl px-4 py-3 flex items-center justify-between shadow-sm ${adm.isRoot?'border-emerald-300':'border-gray-200'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${adm.isRoot?'bg-emerald-500 text-black':'bg-gray-100 text-gray-600'}`}>
-                    {adm.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-black text-gray-900 uppercase">{adm.name}</p>
-                      {adm.isRoot&&<span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black uppercase">Raiz</span>}
-                      {adm.turno&&<span className="text-[8px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-black uppercase">{adm.turno}</span>}
-                    </div>
-                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{adm.cpf}</p>
-                  </div>
-                </div>
-                {/* Só pode excluir se não for raiz e não for ele mesmo */}
-                {!adm.isRoot&&adm.cpf!==user.cpf
-                  ?<button onClick={()=>handleDeleteAdmin(adm)} className="p-2 bg-gray-100 text-gray-400 rounded-xl hover:bg-rose-100 hover:text-rose-600 transition-all border border-gray-200" title="Remover admin"><Trash2 size={14}/></button>
-                  :<div className="w-8 h-8 flex items-center justify-center text-gray-300"><Lock size={14}/></div>
-                }
-              </div>
-            ))}
-            {admins.length===0&&<p className="text-center text-gray-400 text-[10px] font-black uppercase py-6">Nenhum admin cadastrado</p>}
-          </div>
-
-          {/* Aviso de segurança */}
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5"/>
-            <p className="text-[10px] text-amber-700 font-bold leading-relaxed">
-              O admin raiz não pode ser excluído pelo aplicativo. Admins não podem excluir a si mesmos. Todas as alterações ficam registradas no log de auditoria.
-            </p>
-          </div>
         </Modal>
       )}
     </div>
