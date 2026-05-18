@@ -233,26 +233,26 @@ const ProfDashboard = ({name,turno,turnoColor,data,onDrill}) => {
   }[turnoColor];
   const Tile = ({label,value,color,list,cls=''}) => (
     <div onClick={()=>onDrill(label,list)} className={`bg-white p-5 rounded-3xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all ${cls}`}>
-      <p className="text-[9px] font-black uppercase text-gray-400 mb-2">{label}</p>
+      <p className="text-xs font-black uppercase text-gray-500 mb-2">{label}</p>
       <p className={`text-4xl font-black ${color} tracking-tighter`}>{value}</p>
-      <p className="text-[8px] text-gray-300 font-black uppercase mt-1">Ver detalhes</p>
+      <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Ver detalhes</p>
     </div>
   );
   return (
     <div className="space-y-6">
       <div className={`bg-white border ${C2.border} rounded-3xl p-6 flex items-center gap-4 shadow-sm`}>
-        <div className={`${C2.badge} px-4 py-2 rounded-2xl font-black text-[10px] uppercase`}>{turno}</div>
+        <div className={`${C2.badge} px-4 py-2 rounded-2xl font-black text-xs uppercase`}>{turno}</div>
         <div>
-          <h3 className="font-black text-gray-900 italic text-lg uppercase">{name}</h3>
-          <p className="text-[9px] text-gray-500 font-black uppercase">Fisioterapeuta — Turno da {turno}</p>
+          <h3 className="font-black text-gray-900 italic text-xl uppercase">{name}</h3>
+          <p className="text-xs text-gray-500 font-bold uppercase mt-0.5">Fisioterapeuta — Turno da {turno}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         {[['Atend. Hoje',data.daily,C2.text,data.dailyList],['Atend. Mensal',data.monthly,C2.text,data.monthlyList]].map(([l,v,c,ls])=>(
           <div key={l} onClick={()=>onDrill(l,ls)} className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-300 active:scale-95 transition-all">
-            <p className="text-[9px] font-black uppercase text-gray-400 mb-2">{l}</p>
+            <p className="text-xs font-black uppercase text-gray-500 mb-2">{l}</p>
             <p className={`text-5xl font-black ${c} tracking-tighter`}>{v}</p>
-            <p className="text-[8px] text-gray-300 font-black uppercase mt-1">Ver detalhes</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Ver detalhes</p>
           </div>
         ))}
       </div>
@@ -759,15 +759,17 @@ export default function App() {
   const metricsByProf = useMemo(()=>{
     const hoje=new Date().toISOString().split('T')[0];
     const mes=hoje.slice(0,7);
-    const calc=prof=>{
-      const hrs=prof===PROF_MANHA?HOURS_M:HOURS_T;
+    // Manhã = sempre HOURS_M, Tarde = sempre HOURS_T
+    // O nome do profissional vem de profManha/profTarde (dinâmico)
+    const calc=(turno)=>{
+      const hrs = turno==='manha' ? HOURS_M : HOURS_T;
       const ps=schedules.filter(s=>hrs.includes(s.hour));
       const fl=(fn)=>ps.filter(fn);
       const dailyList=fl(s=>s.createdAt?.startsWith(hoje)&&s.status==='concluida');
       const monthlyList=fl(s=>s.createdAt?.startsWith(mes)&&s.status==='concluida');
       return{
         daily:dailyList.length,dailyList,monthly:monthlyList.length,monthlyList,
-        totalConcluidas:(concluidaList=>concluidaList.length)(fl(s=>s.status==='concluida')),
+        totalConcluidas:(l=>l.length)(fl(s=>s.status==='concluida')),
         concluidaList:fl(s=>s.status==='concluida'),
         totalFaltas:(l=>l.length)(fl(s=>s.status==='falta')), faltaList:fl(s=>s.status==='falta'),
         totalReposicao:(l=>l.length)(fl(s=>s.status==='reposicao')), reposicaoList:fl(s=>s.status==='reposicao'),
@@ -777,8 +779,8 @@ export default function App() {
         total:ps.length,allList:ps,
       };
     };
-    return{andriele:calc(PROF_MANHA),jessica:calc(PROF_TARDE)};
-  },[schedules]);
+    return{andriele:calc('manha'),jessica:calc('tarde')};
+  },[schedules,profManha,profTarde]);
 
   const userStats = useMemo(()=>{
     if(!user||user.role==='admin') return null;
@@ -1272,8 +1274,12 @@ export default function App() {
           <div>
             <h1 className="text-2xl lg:text-3xl font-black uppercase italic mb-6 text-gray-900">Dashboard</h1>
             <div className="flex gap-2 mb-8 overflow-x-auto pb-1 no-scrollbar">
-              {[['geral','Geral','bg-gray-900 text-white'],['andriele','Andriele · Manhã','bg-amber-500 text-black'],['jessica','Jessica · Tarde','bg-blue-500 text-white']].map(([k,l,a])=>(
-                <button key={k} onClick={()=>setDashSubTab(k)} className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase whitespace-nowrap transition-all ${dashSubTab===k?a:'bg-white text-gray-500 border border-gray-200 shadow-sm'}`}>{l}</button>
+              {[
+                ['geral',    'Geral',                           'bg-gray-900 text-white'],
+                ['andriele', `${profManha.split(' ')[0]} · Manhã`, 'bg-amber-500 text-black'],
+                ['jessica',  `${profTarde.split(' ')[0]} · Tarde`, 'bg-blue-500 text-white'],
+              ].map(([k,l,a])=>(
+                <button key={k} onClick={()=>setDashSubTab(k)} className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase whitespace-nowrap transition-all ${dashSubTab===k?a:'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>{l}</button>
               ))}
             </div>
             {dashSubTab==='geral'&&(()=>{
@@ -1294,6 +1300,7 @@ export default function App() {
                 </div>
               );
             })()}
+            {/* Usa profManha/profTarde dinâmicos — atualizam automaticamente quando turno muda */}
             {dashSubTab==='andriele'&&<ProfDashboard name={profManha} turno="Manhã" turnoColor="amber" data={metricsByProf.andriele} onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
             {dashSubTab==='jessica' &&<ProfDashboard name={profTarde} turno="Tarde" turnoColor="blue"  data={metricsByProf.jessica}  onDrill={(l,items)=>setDashDrill({label:l,items})}/>}
           </div>
